@@ -3,9 +3,15 @@ import BottomNavigation from "./BottomNavigation";
 
 type LayoutProps = {
   children: ReactNode;
+  currentPage: string;
+  onChangePage: (page: string) => void;
 };
 
-export default function Layout({ children }: LayoutProps) {
+export default function Layout({
+  children,
+  currentPage,
+  onChangePage,
+}: LayoutProps) {
   return (
     <div
       style={{
@@ -25,7 +31,10 @@ export default function Layout({ children }: LayoutProps) {
         {children}
       </div>
 
-      <BottomNavigation />
+      <BottomNavigation
+        currentPage={currentPage}
+        onChangePage={onChangePage}
+      />
     </div>
   );
 }
