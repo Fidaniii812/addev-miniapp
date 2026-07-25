@@ -7,19 +7,25 @@ type LayoutProps = {
 
 export default function Layout({ children }: LayoutProps) {
   return (
-    <>
-      <main
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#0f172a",
+        color: "#ffffff",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <div
         style={{
-          minHeight: "100vh",
+          flex: 1,
           paddingBottom: "70px",
-          background: "#0f172a",
-          color: "#ffffff",
         }}
       >
         {children}
-      </main>
+      </div>
 
       <BottomNavigation />
-    </>
+    </div>
   );
 }
