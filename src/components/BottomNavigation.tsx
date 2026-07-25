@@ -1,4 +1,20 @@
-export default function BottomNavigation() {
+type BottomNavigationProps = {
+  currentPage: string;
+  onChangePage: (page: string) => void;
+};
+
+export default function BottomNavigation({
+  currentPage,
+  onChangePage,
+}: BottomNavigationProps) {
+  const items = [
+    { id: "home", label: "🏠 Home" },
+    { id: "tasks", label: "📋 Tasks" },
+    { id: "wallet", label: "👛 Wallet" },
+    { id: "community", label: "👥 Community" },
+    { id: "profile", label: "👤 Profile" },
+  ];
+
   return (
     <nav
       style={{
@@ -11,15 +27,24 @@ export default function BottomNavigation() {
         justifyContent: "space-around",
         alignItems: "center",
         background: "#1e293b",
-        color: "#ffffff",
         borderTop: "1px solid #334155",
       }}
     >
-      <span>🏠 Home</span>
-<span>📋 Tasks</span>
-<span>👛 Wallet</span>
-<span>👥 Community</span>
-<span>👤 Profile</span>
+      {items.map((item) => (
+        <button
+          key={item.id}
+          onClick={() => onChangePage(item.id)}
+          style={{
+            background: "none",
+            border: "none",
+            color: currentPage === item.id ? "#38bdf8" : "#ffffff",
+            fontWeight: currentPage === item.id ? "bold" : "normal",
+            cursor: "pointer",
+          }}
+        >
+          {item.label}
+        </button>
+      ))}
     </nav>
   );
 }
