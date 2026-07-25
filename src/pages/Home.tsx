@@ -1,7 +1,18 @@
+import UserCard from "../components/UserCard";
+import useTelegramUser from "../hooks/useTelegramUser";
+
 export default function Home() {
+  const user = useTelegramUser();
+
   return (
     <div style={{ padding: "20px" }}>
       <h1>🚀 AdDev Rewards</h1>
+
+      <UserCard
+        firstName={user?.first_name ?? "Guest"}
+        username={user?.username}
+        userId={user?.id}
+      />
 
       <div
         style={{
