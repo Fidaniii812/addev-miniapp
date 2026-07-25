@@ -11,6 +11,9 @@ import AdDevPointsActions from "../components/AdDevPointsActions";
 import AdDevPointsStats from "../components/AdDevPointsStats";
 import AdDevPointsHistory from "../components/AdDevPointsHistory";
 
+import DailyTasksList from "../components/DailyTasksList";
+import DailyRewardsCard from "../components/DailyRewardsCard";
+
 import useTelegramUser from "../hooks/useTelegramUser";
 import useTelegramStars from "../hooks/useTelegramStars";
 import useTelegramTransactions from "../hooks/useTelegramTransactions";
@@ -20,6 +23,9 @@ import useAdDevPoints from "../hooks/useAdDevPoints";
 import useAdDevPointsStats from "../hooks/useAdDevPointsStats";
 import useAdDevPointsHistory from "../hooks/useAdDevPointsHistory";
 
+import useDailyTasks from "../hooks/useDailyTasks";
+import useDailyRewards from "../hooks/useDailyRewards";
+
 export default function Home() {
   const user = useTelegramUser();
 
@@ -28,10 +34,7 @@ export default function Home() {
   const { totalBought, totalSpent } = useStarsStats(transactions);
 
   const { points, addPoints, spendPoints } = useAdDevPoints();
-  const {
-    history,
-    addHistory,
-  } = useAdDevPointsHistory();
+  const { history, addHistory } = useAdDevPointsHistory();
 
   const pointStats = useAdDevPointsStats(
     history
@@ -41,6 +44,10 @@ export default function Home() {
       .filter((h) => h.type === "spend")
       .reduce((s, h) => s + h.amount, 0)
   );
+
+  const { tasks, completeTask } = useDailyTasks();
+  const { totalRewards, completedTasks } =
+    useDailyRewards(tasks);
 
   const handleBuy = () => {
     buyStars(10);
@@ -110,6 +117,16 @@ export default function Home() {
 
       <AdDevPointsHistory
         history={history}
+      />
+
+      <DailyRewardsCard
+        totalRewards={totalRewards}
+        completedTasks={completedTasks}
+      />
+
+      <DailyTasksList
+        tasks={tasks}
+        onComplete={completeTask}
       />
     </div>
   );
