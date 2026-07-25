@@ -9,10 +9,10 @@ import Community from "./pages/Community";
 import Profile from "./pages/Profile";
 
 export default function App() {
-  const [page] = useState("home");
+  const [page, setPage] = useState("home");
 
   return (
-    <Layout>
+    <Layout currentPage={page} onChangePage={setPage}>
       {page === "home" && <Home />}
       {page === "tasks" && <Tasks />}
       {page === "wallet" && <Wallet />}
