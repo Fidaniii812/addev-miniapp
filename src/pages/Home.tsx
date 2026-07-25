@@ -14,6 +14,9 @@ import AdDevPointsHistory from "../components/AdDevPointsHistory";
 import DailyTasksList from "../components/DailyTasksList";
 import DailyRewardsCard from "../components/DailyRewardsCard";
 
+import RewardsList from "../components/RewardsList";
+import RewardsStatsCard from "../components/RewardsStatsCard";
+
 import useTelegramUser from "../hooks/useTelegramUser";
 import useTelegramStars from "../hooks/useTelegramStars";
 import useTelegramTransactions from "../hooks/useTelegramTransactions";
@@ -26,6 +29,9 @@ import useAdDevPointsHistory from "../hooks/useAdDevPointsHistory";
 import useDailyTasks from "../hooks/useDailyTasks";
 import useDailyRewards from "../hooks/useDailyRewards";
 
+import useRewards from "../hooks/useRewards";
+import useRewardsStats from "../hooks/useRewardsStats";
+
 export default function Home() {
   const user = useTelegramUser();
 
@@ -37,17 +43,15 @@ export default function Home() {
   const { history, addHistory } = useAdDevPointsHistory();
 
   const pointStats = useAdDevPointsStats(
-    history
-      .filter((h) => h.type === "earn")
-      .reduce((s, h) => s + h.amount, 0),
-    history
-      .filter((h) => h.type === "spend")
-      .reduce((s, h) => s + h.amount, 0)
+    history.filter(h => h.type === "earn").reduce((s, h) => s + h.amount, 0),
+    history.filter(h => h.type === "spend").reduce((s, h) => s + h.amount, 0)
   );
 
   const { tasks, completeTask } = useDailyTasks();
-  const { totalRewards, completedTasks } =
-    useDailyRewards(tasks);
+  const { totalRewards, completedTasks } = useDailyRewards(tasks);
+
+  const { rewards, claimReward } = useRewards();
+  const rewardsStats = useRewardsStats(rewards);
 
   const handleBuy = () => {
     buyStars(10);
@@ -73,51 +77,21 @@ export default function Home() {
     <div style={{ padding: "20px" }}>
       <UserCard user={user} />
 
-      <TelegramStarsCard
-        stars={stars}
-        onBuy={handleBuy}
-        onSpend={handleSpend}
-      />
-
+      <TelegramStarsCard stars={stars} onBuy={handleBuy} onSpend={handleSpend} />
       <StarsBalance stars={stars} />
-
-      <StarsActions
-        onBuy={handleBuy}
-        onSpend={handleSpend}
-      />
-
-      <StarsStats
-        stars={stars}
-        totalBought={totalBought}
-        totalSpent={totalSpent}
-      />
-
-      <StarsOverview
-        stars={stars}
-        totalBought={totalBought}
-        totalSpent={totalSpent}
-      />
-
-      <TransactionHistory
-        transactions={transactions}
-      />
+      <StarsActions onBuy={handleBuy} onSpend={handleSpend} />
+      <StarsStats stars={stars} totalBought={totalBought} totalSpent={totalSpent} />
+      <StarsOverview stars={stars} totalBought={totalBought} totalSpent={totalSpent} />
+      <TransactionHistory transactions={transactions} />
 
       <AdDevPointsCard points={points} />
-
-      <AdDevPointsActions
-        onAdd={handleAddPoints}
-        onSpend={handleSpendPoints}
-      />
-
+      <AdDevPointsActions onAdd={handleAddPoints} onSpend={handleSpendPoints} />
       <AdDevPointsStats
         points={pointStats.points}
         totalEarned={pointStats.totalEarned}
         totalSpent={pointStats.totalSpent}
       />
-
-      <AdDevPointsHistory
-        history={history}
-      />
+      <AdDevPointsHistory history={history} />
 
       <DailyRewardsCard
         totalRewards={totalRewards}
@@ -127,6 +101,16 @@ export default function Home() {
       <DailyTasksList
         tasks={tasks}
         onComplete={completeTask}
+      />
+
+      <RewardsStatsCard
+        totalRewards={rewardsStats.totalRewards}
+        claimedRewards={rewardsStats.claimedRewards}
+      />
+
+      <RewardsList
+        rewards={rewards}
+        onClaim={claimReward}
       />
     </div>
   );
