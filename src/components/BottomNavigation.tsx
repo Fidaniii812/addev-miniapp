@@ -16,9 +16,10 @@ export default function BottomNavigation() {
       }}
     >
       <span>🏠 Home</span>
-      <span>📋 Tasks</span>
-      <span>👛 Wallet</span>
-      <span>👤 Profile</span>
+<span>📋 Tasks</span>
+<span>👛 Wallet</span>
+<span>👥 Community</span>
+<span>👤 Profile</span>
     </nav>
   );
 }
