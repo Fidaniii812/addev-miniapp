@@ -1,9 +1,13 @@
 type TelegramStarsCardProps = {
   stars: number;
+  onBuy?: () => void;
+  onSpend?: () => void;
 };
 
 export default function TelegramStarsCard({
   stars,
+  onBuy,
+  onSpend,
 }: TelegramStarsCardProps) {
   return (
     <div
@@ -26,6 +30,7 @@ export default function TelegramStarsCard({
         }}
       >
         <button
+          onClick={onBuy}
           style={{
             flex: 1,
             padding: "10px",
@@ -38,6 +43,7 @@ export default function TelegramStarsCard({
         </button>
 
         <button
+          onClick={onSpend}
           style={{
             flex: 1,
             padding: "10px",
