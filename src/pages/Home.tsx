@@ -6,29 +6,41 @@ import TransactionHistory from "../components/TransactionHistory";
 import StarsStats from "../components/StarsStats";
 import StarsOverview from "../components/StarsOverview";
 
+import AdDevPointsCard from "../components/AdDevPointsCard";
+import AdDevPointsActions from "../components/AdDevPointsActions";
+import AdDevPointsStats from "../components/AdDevPointsStats";
+import AdDevPointsHistory from "../components/AdDevPointsHistory";
+
 import useTelegramUser from "../hooks/useTelegramUser";
 import useTelegramStars from "../hooks/useTelegramStars";
 import useTelegramTransactions from "../hooks/useTelegramTransactions";
 import useStarsStats from "../hooks/useStarsStats";
 
+import useAdDevPoints from "../hooks/useAdDevPoints";
+import useAdDevPointsStats from "../hooks/useAdDevPointsStats";
+import useAdDevPointsHistory from "../hooks/useAdDevPointsHistory";
+
 export default function Home() {
   const user = useTelegramUser();
 
-  const {
-    stars,
-    buyStars,
-    spendStars,
-  } = useTelegramStars();
+  const { stars, buyStars, spendStars } = useTelegramStars();
+  const { transactions, addTransaction } = useTelegramTransactions();
+  const { totalBought, totalSpent } = useStarsStats(transactions);
 
+  const { points, addPoints, spendPoints } = useAdDevPoints();
   const {
-    transactions,
-    addTransaction,
-  } = useTelegramTransactions();
+    history,
+    addHistory,
+  } = useAdDevPointsHistory();
 
-  const {
-    totalBought,
-    totalSpent,
-  } = useStarsStats(transactions);
+  const pointStats = useAdDevPointsStats(
+    history
+      .filter((h) => h.type === "earn")
+      .reduce((s, h) => s + h.amount, 0),
+    history
+      .filter((h) => h.type === "spend")
+      .reduce((s, h) => s + h.amount, 0)
+  );
 
   const handleBuy = () => {
     buyStars(10);
@@ -38,6 +50,16 @@ export default function Home() {
   const handleSpend = () => {
     spendStars(10);
     addTransaction("spend", 10);
+  };
+
+  const handleAddPoints = () => {
+    addPoints(100);
+    addHistory("earn", 100);
+  };
+
+  const handleSpendPoints = () => {
+    spendPoints(50);
+    addHistory("spend", 50);
   };
 
   return (
@@ -71,6 +93,23 @@ export default function Home() {
 
       <TransactionHistory
         transactions={transactions}
+      />
+
+      <AdDevPointsCard points={points} />
+
+      <AdDevPointsActions
+        onAdd={handleAddPoints}
+        onSpend={handleSpendPoints}
+      />
+
+      <AdDevPointsStats
+        points={pointStats.points}
+        totalEarned={pointStats.totalEarned}
+        totalSpent={pointStats.totalSpent}
+      />
+
+      <AdDevPointsHistory
+        history={history}
       />
     </div>
   );
