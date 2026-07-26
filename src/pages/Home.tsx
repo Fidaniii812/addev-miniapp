@@ -1,21 +1,67 @@
 import { useState, useEffect } from "react";
+import { supabase } from "../supabaseClient";
 
 export default function Home() {
-  const [points, setPoints] = useState<number>(1250);
+  const [points, setPoints] = useState<number>(0);
   const [claimedToday, setClaimedToday] = useState<boolean>(false);
+  const [telegramUser, setTelegramUser] = useState<any>(null);
 
   useEffect(() => {
-    // I thotë Telegramit ta hapë aplikacionin në Full Screen
-    if ((window as any).Telegram?.WebApp) {
-      (window as any).Telegram.WebApp.ready();
-      (window as any).Telegram.WebApp.expand();
+    // Hapja në Full Screen dhe leximi i të dhënave nga Telegram
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      const user = tg.initDataUnsafe?.user;
+      if (user) {
+        setTelegramUser(user);
+        syncUserWithSupabase(user);
+      }
     }
   }, []);
 
-  const handleDailyClaim = () => {
+  // Sinkronizimi i përdoruesit me Supabase Database
+  const syncUserWithSupabase = async (user: any) => {
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("telegram_id", user.id)
+      .single();
+
+    if (error && error.code === "PGRST116") {
+      // Përdorues i ri -> Krijo profilin me 1250 PTS fillestare
+      const { data: newUser } = await supabase
+        .from("users")
+        .insert([{
+          telegram_id: user.id,
+          username: user.username || "",
+          first_name: user.first_name || "",
+          points: 1250
+        }])
+        .select()
+        .single();
+      
+      if (newUser) setPoints(newUser.points);
+    } else if (data) {
+      // Përdorues ekzistues -> Merri pikët reale nga Database
+      setPoints(data.points);
+    }
+  };
+
+  const handleDailyClaim = async () => {
     if (claimedToday) return;
-    setPoints((prev) => prev + 100);
+
+    const newBalance = points + 100;
+    setPoints(newBalance);
     setClaimedToday(true);
+
+    if (telegramUser) {
+      await supabase
+        .from("users")
+        .update({ points: newBalance })
+        .eq("telegram_id", telegramUser.id);
+    }
+
     alert("You claimed +100 PTS for today!");
   };
 
@@ -30,7 +76,9 @@ export default function Home() {
         border: "1px solid #38bdf8",
         marginBottom: "20px"
       }}>
-        <div style={{ fontSize: "14px", color: "#93c5fd" }}>Welcome to AdDev Rewards</div>
+        <div style={{ fontSize: "14px", color: "#93c5fd" }}>
+          Welcome {telegramUser?.first_name ? telegramUser.first_name : "to AdDev Rewards"}
+        </div>
         <div style={{ fontSize: "36px", fontWeight: "bold", margin: "10px 0" }}>
           {points.toLocaleString()} <span style={{ fontSize: "20px", color: "#38bdf8" }}>PTS</span>
         </div>
