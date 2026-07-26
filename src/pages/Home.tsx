@@ -1,117 +1,126 @@
-import UserCard from "../components/UserCard";
-import TelegramStarsCard from "../components/TelegramStarsCard";
-import StarsBalance from "../components/StarsBalance";
-import StarsActions from "../components/StarsActions";
-import TransactionHistory from "../components/TransactionHistory";
-import StarsStats from "../components/StarsStats";
-import StarsOverview from "../components/StarsOverview";
-
-import AdDevPointsCard from "../components/AdDevPointsCard";
-import AdDevPointsActions from "../components/AdDevPointsActions";
-import AdDevPointsStats from "../components/AdDevPointsStats";
-import AdDevPointsHistory from "../components/AdDevPointsHistory";
-
-import DailyTasksList from "../components/DailyTasksList";
-import DailyRewardsCard from "../components/DailyRewardsCard";
-
-import RewardsList from "../components/RewardsList";
-import RewardsStatsCard from "../components/RewardsStatsCard";
-
-import useTelegramUser from "../hooks/useTelegramUser";
-import useTelegramStars from "../hooks/useTelegramStars";
-import useTelegramTransactions from "../hooks/useTelegramTransactions";
-import useStarsStats from "../hooks/useStarsStats";
-
-import useAdDevPoints from "../hooks/useAdDevPoints";
-import useAdDevPointsStats from "../hooks/useAdDevPointsStats";
-import useAdDevPointsHistory from "../hooks/useAdDevPointsHistory";
-
-import useDailyTasks from "../hooks/useDailyTasks";
-import useDailyRewards from "../hooks/useDailyRewards";
-
-import useRewards from "../hooks/useRewards";
-import useRewardsStats from "../hooks/useRewardsStats";
+import { useState, useEffect } from "react";
+import { getTelegramWebApp } from "../lib/telegram";
 
 export default function Home() {
-  const user = useTelegramUser();
+  const [user, setUser] = useState<{ first_name?: string; username?: string; id?: number } | null>(null);
+  const [points, setPoints] = useState<number>(1250);
+  const [stars, setStars] = useState<number>(0);
 
-  const { stars, buyStars, spendStars } = useTelegramStars();
-  const { transactions, addTransaction } = useTelegramTransactions();
-  const { totalBought, totalSpent } = useStarsStats(transactions);
-
-  const { points, addPoints, spendPoints } = useAdDevPoints();
-  const { history, addHistory } = useAdDevPointsHistory();
-
-  const pointStats = useAdDevPointsStats(
-    history.filter(h => h.type === "earn").reduce((s, h) => s + h.amount, 0),
-    history.filter(h => h.type === "spend").reduce((s, h) => s + h.amount, 0)
-  );
-
-  const { tasks, completeTask } = useDailyTasks();
-  const { totalRewards, completedTasks } = useDailyRewards(tasks);
-
-  const { rewards, claimReward } = useRewards();
-  const rewardsStats = useRewardsStats(rewards);
-
-  const handleBuy = () => {
-    buyStars(10);
-    addTransaction("buy", 10);
-  };
-
-  const handleSpend = () => {
-    spendStars(10);
-    addTransaction("spend", 10);
-  };
-
-  const handleAddPoints = () => {
-    addPoints(100);
-    addHistory("earn", 100);
-  };
-
-  const handleSpendPoints = () => {
-    spendPoints(50);
-    addHistory("spend", 50);
-  };
+  useEffect(() => {
+    const tg = getTelegramWebApp();
+    if (tg?.initDataUnsafe?.user) {
+      setUser(tg.initDataUnsafe.user);
+    }
+  }, []);
 
   return (
-    <div style={{ padding: "20px" }}>
-      <UserCard user={user} />
+    <div style={{ padding: "16px", color: "#fff", fontFamily: "sans-serif", paddingBottom: "80px" }}>
+      
+      {/* Profile Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
+        <div style={{ 
+          width: "48px", 
+          height: "48px", 
+          borderRadius: "50%", 
+          background: "linear-gradient(135deg, #3b82f6, #8b5cf6)", 
+          display: "flex", 
+          alignItems: "center", 
+          justifyContent: "center", 
+          fontWeight: "bold",
+          fontSize: "20px" 
+        }}>
+          {user?.first_name ? user.first_name[0] : "U"}
+        </div>
+        <div>
+          <h3 style={{ margin: 0, fontSize: "18px" }}>
+            {user?.first_name ? user.first_name : "Telegram User"}
+          </h3>
+          <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+            {user?.username ? `@${user.username}` : user?.id ? `ID: ${user.id}` : "AdDev Member"}
+          </span>
+        </div>
+      </div>
 
-      <TelegramStarsCard stars={stars} onBuy={handleBuy} onSpend={handleSpend} />
-      <StarsBalance stars={stars} />
-      <StarsActions onBuy={handleBuy} onSpend={handleSpend} />
-      <StarsStats stars={stars} totalBought={totalBought} totalSpent={totalSpent} />
-      <StarsOverview stars={stars} totalBought={totalBought} totalSpent={totalSpent} />
-      <TransactionHistory transactions={transactions} />
+      {/* Main Balance Card (Hero Section) */}
+      <div style={{ 
+        background: "linear-gradient(135deg, #1e293b, #0f172a)", 
+        padding: "24px", 
+        borderRadius: "20px", 
+        textAlign: "center", 
+        border: "1px solid #334155",
+        boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.3)",
+        marginBottom: "20px" 
+      }}>
+        <span style={{ fontSize: "13px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px" }}>
+          Total Balance
+        </span>
+        <h1 style={{ fontSize: "40px", margin: "8px 0", color: "#38bdf8", fontWeight: "800" }}>
+          {points.toLocaleString()} <span style={{ fontSize: "20px" }}>PTS</span>
+        </h1>
 
-      <AdDevPointsCard points={points} />
-      <AdDevPointsActions onAdd={handleAddPoints} onSpend={handleSpendPoints} />
-      <AdDevPointsStats
-        points={pointStats.points}
-        totalEarned={pointStats.totalEarned}
-        totalSpent={pointStats.totalSpent}
-      />
-      <AdDevPointsHistory history={history} />
+        <div style={{ display: "flex", justifyContext: "center", gap: "10px", marginTop: "16px" }}>
+          <div style={{ flex: 1, background: "#1e293b", padding: "10px", borderRadius: "12px", border: "1px solid #334155" }}>
+            <span style={{ fontSize: "11px", color: "#94a3b8" }}>Stars Balance</span>
+            <div style={{ fontSize: "16px", fontWeight: "bold", color: "#eab308", marginTop: "4px" }}>
+              ⭐ {stars} Stars
+            </div>
+          </div>
+        </div>
+      </div>
 
-      <DailyRewardsCard
-        totalRewards={totalRewards}
-        completedTasks={completedTasks}
-      />
+      {/* Quick Actions / Boost section */}
+      <div style={{ 
+        background: "#1e293b", 
+        padding: "16px", 
+        borderRadius: "16px", 
+        border: "1px solid #334155",
+        marginBottom: "20px"
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h4 style={{ margin: "0 0 4px 0", fontSize: "15px" }}>⭐ VIP Boost 2X</h4>
+            <p style={{ margin: 0, fontSize: "12px", color: "#94a3b8" }}>Dyfisho pikët për çdo detyrë</p>
+          </div>
+          <button style={{ 
+            background: "#eab308", 
+            color: "#000", 
+            border: "none", 
+            padding: "8px 16px", 
+            borderRadius: "10px", 
+            fontWeight: "bold",
+            cursor: "pointer" 
+          }}>
+            15 Stars
+          </button>
+        </div>
+      </div>
 
-      <DailyTasksList
-        tasks={tasks}
-        onComplete={completeTask}
-      />
+      {/* Daily Reward Banner */}
+      <div style={{ 
+        background: "linear-gradient(90deg, #2563eb, #1d4ed8)", 
+        padding: "16px", 
+        borderRadius: "16px", 
+        display: "flex", 
+        justifyContent: "space-between", 
+        alignItems: "center" 
+      }}>
+        <div>
+          <h4 style={{ margin: "0 0 4px 0", fontSize: "15px" }}>Daily Check-In</h4>
+          <p style={{ margin: 0, fontSize: "12px", color: "#bfdbfe" }}>Marr +50 PTS çdo ditë</p>
+        </div>
+        <button style={{ 
+          background: "#fff", 
+          color: "#1d4ed8", 
+          border: "none", 
+          padding: "8px 16px", 
+          borderRadius: "10px", 
+          fontWeight: "bold",
+          cursor: "pointer" 
+        }}>
+          Claim
+        </button>
+      </div>
 
-      <RewardsStatsCard
-        totalRewards={rewardsStats.totalRewards}
-        claimedRewards={rewardsStats.claimedRewards}
-      />
-
-      <RewardsList
-        rewards={rewards}
-        onClaim={claimReward}
-      />
     </div>
   );
 }
