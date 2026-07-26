@@ -4,7 +4,7 @@ interface Task {
   id: number;
   title: string;
   reward: number;
-  category: "crypto" | "social";
+  category: "crypto" | "affiliate" | "telegram";
   link: string;
   completed: boolean;
 }
@@ -13,29 +13,70 @@ export default function Tasks() {
   const [adsWatched, setAdsWatched] = useState<number>(0);
   const maxDailyAds = 20;
 
+  // LISTA E PLOTË E LINQEVE TË TUA DHE AIRDROPS KRYESORE
   const [tasks, setTasks] = useState<Task[]>([
     {
       id: 1,
-      title: "Register on Binance Airdrop",
+      title: "Join Blum Airdrop & Earn Points",
       reward: 500,
       category: "crypto",
-      link: "https://google.com",
+      link: "https://t.me/blum/app?startapp=ref_LL9thrrMxR",
       completed: false,
     },
     {
       id: 2,
-      title: "Join Bybit Bonus Event",
-      reward: 400,
+      title: "Claim TonWave Mining Bonus",
+      reward: 450,
       category: "crypto",
-      link: "https://google.com",
+      link: "https://t.me/TonWave_1Bot/ton?startapp=8508477699",
       completed: false,
     },
     {
       id: 3,
-      title: "Join Official Telegram Channel",
-      reward: 150,
-      category: "social",
-      link: "https://t.me",
+      title: "Start Bitcoin Crane Web Mining",
+      reward: 350,
+      category: "crypto",
+      link: "https://www.bitcoincrane.com?ref=b216127",
+      completed: false,
+    },
+    {
+      id: 4,
+      title: "Join Bitcoin Crane Telegram Bot",
+      reward: 300,
+      category: "telegram",
+      link: "https://t.me/BitcoinCrane_bot?start=b216127",
+      completed: false,
+    },
+    {
+      id: 5,
+      title: "Claim Money Plus App Reward",
+      reward: 400,
+      category: "crypto",
+      link: "https://t.me/Money_Plus12_Bot/moneyplus?startapp=8508477699",
+      completed: false,
+    },
+    {
+      id: 6,
+      title: "Claim Cash Plus Bonus",
+      reward: 400,
+      category: "crypto",
+      link: "https://t.me/CashPlus_Bot/cashplus?startapp=8508477699",
+      completed: false,
+    },
+    {
+      id: 7,
+      title: "Join Admitad Partner Network",
+      reward: 600,
+      category: "affiliate",
+      link: "https://www.admitad.com/affiliate-publishers/?ref=kaw95ey05k",
+      completed: false,
+    },
+    {
+      id: 8,
+      title: "Join PAWS Viral Telegram Airdrop",
+      reward: 500,
+      category: "crypto",
+      link: "https://t.me/PAWSOGBot",
       completed: false,
     },
   ]);
@@ -45,7 +86,6 @@ export default function Tasks() {
       alert("Daily limit reached! Come back tomorrow.");
       return;
     }
-    // Simulation for Ad Network Call
     alert("Loading sponsored video ad...");
     setAdsWatched((prev) => prev + 1);
   };
@@ -99,7 +139,7 @@ export default function Tasks() {
       </div>
 
       {/* FEATURED OFFERS & AIRDROPS */}
-      <h3 style={{ fontSize: "16px", marginBottom: "12px" }}>🚀 Featured Offers</h3>
+      <h3 style={{ fontSize: "16px", marginBottom: "12px" }}>🚀 Top Offers & Airdrops</h3>
       {tasks.map((task) => (
         <div
           key={task.id}
