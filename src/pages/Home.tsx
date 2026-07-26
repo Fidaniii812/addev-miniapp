@@ -8,12 +8,12 @@ export default function Home() {
     if (claimedToday) return;
     setPoints((prev) => prev + 100);
     setClaimedToday(true);
-    alert("Keni marrë +100 PTS për sot!");
+    alert("You claimed +100 PTS for today!");
   };
 
   return (
     <div style={{ padding: "16px", color: "#fff", fontFamily: "sans-serif", paddingBottom: "80px" }}>
-      {/* Banner Kryesor */}
+      {/* Main Banner */}
       <div style={{
         background: "linear-gradient(135deg, #0284c7, #0f172a)",
         padding: "24px 16px",
@@ -22,12 +22,12 @@ export default function Home() {
         border: "1px solid #38bdf8",
         marginBottom: "20px"
       }}>
-        <div style={{ fontSize: "14px", color: "#93c5fd" }}>Mirësevini te AdDev Rewards</div>
+        <div style={{ fontSize: "14px", color: "#93c5fd" }}>Welcome to AdDev Rewards</div>
         <div style={{ fontSize: "36px", fontWeight: "bold", margin: "10px 0" }}>
           {points.toLocaleString()} <span style={{ fontSize: "20px", color: "#38bdf8" }}>PTS</span>
         </div>
         <p style={{ fontSize: "12px", color: "#cbd5e1", margin: 0 }}>
-          Kryeni detyra, shikoni reklama dhe fito shpërblime çdo ditë!
+          Complete tasks, watch ads, and earn daily rewards!
         </p>
       </div>
 
@@ -41,8 +41,8 @@ export default function Home() {
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <h3 style={{ margin: "0 0 4px 0", fontSize: "16px" }}>🎁 Shpërblimi Ditor</h3>
-            <p style={{ margin: 0, fontSize: "12px", color: "#94a3b8" }}>Hyr çdo ditë për +100 PTS</p>
+            <h3 style={{ margin: "0 0 4px 0", fontSize: "16px" }}>🎁 Daily Reward</h3>
+            <p style={{ margin: 0, fontSize: "12px", color: "#94a3b8" }}>Claim +100 PTS every day</p>
           </div>
           <button
             onClick={handleDailyClaim}
@@ -57,24 +57,24 @@ export default function Home() {
               cursor: claimedToday ? "not-allowed" : "pointer"
             }}
           >
-            {claimedToday ? "E Marre" : "Merr +100"}
+            {claimedToday ? "Claimed" : "Claim +100"}
           </button>
         </div>
       </div>
 
-      {/* Direct Deal Banner */}
+      {/* Hot Offer of the Day */}
       <div style={{
         background: "#1e293b",
         padding: "16px",
         borderRadius: "16px",
         border: "1px solid #334155"
       }}>
-        <h3 style={{ margin: "0 0 8px 0", fontSize: "16px", color: "#eab308" }}>🔥 Oferta e Ditës</h3>
+        <h3 style={{ margin: "0 0 8px 0", fontSize: "16px", color: "#eab308" }}>🔥 Hot Offer of the Day</h3>
         <p style={{ fontSize: "13px", color: "#94a3b8", marginBottom: "12px" }}>
-          Regjistrohu në platformën tonë me të re affiliate dhe fito pikë ekstra!
+          Join Blum Airdrop today and earn bonus rewards!
         </p>
         <button
-          onClick={() => window.open("https://google.com", "_blank")}
+          onClick={() => window.open("https://t.me/blum/app?startapp=ref_LL9thrrMxR", "_blank")}
           style={{
             width: "100%",
             padding: "10px",
@@ -86,7 +86,7 @@ export default function Home() {
             cursor: "pointer"
           }}
         >
-          Shiko Ofertën
+          Open Blum Offer
         </button>
       </div>
     </div>
