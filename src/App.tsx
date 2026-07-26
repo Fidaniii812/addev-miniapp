@@ -7,15 +7,15 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<"home" | "tasks" | "wallet">("home");
 
   return (
-    <div style={{ background: "#0f172a", minHeight: "100vh", color: "#fff" }}>
-      {/* Përmbajtja e Faqes */}
-      <main style={{ maxWidth: "500px", margin: "0 auto" }}>
+    <div style={{ background: "#0f172a", minHeight: "100vh", color: "#fff", fontFamily: "sans-serif" }}>
+      {/* Active View */}
+      <main style={{ maxWidth: "480px", margin: "0 auto" }}>
         {activeTab === "home" && <Home />}
         {activeTab === "tasks" && <Tasks />}
         {activeTab === "wallet" && <Wallet />}
       </main>
 
-      {/* Bottom Navigation Menu */}
+      {/* Navigation Bar */}
       <nav style={{
         position: "fixed",
         bottom: 0,
@@ -26,7 +26,7 @@ export default function App() {
         display: "flex",
         justifyContent: "space-around",
         padding: "12px 0",
-        maxWidth: "500px",
+        maxWidth: "480px",
         margin: "0 auto"
       }}>
         <button
@@ -40,7 +40,7 @@ export default function App() {
             fontSize: "14px"
           }}
         >
-          🏠 Kryesore
+          🏠 Home
         </button>
 
         <button
@@ -54,7 +54,7 @@ export default function App() {
             fontSize: "14px"
           }}
         >
-          🎯 Detyrat
+          🎯 Tasks
         </button>
 
         <button
@@ -68,7 +68,7 @@ export default function App() {
             fontSize: "14px"
           }}
         >
-          👛 Portofoli
+          👛 Wallet
         </button>
       </nav>
     </div>
