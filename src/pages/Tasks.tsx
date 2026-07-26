@@ -4,13 +4,34 @@ import { supabase } from "../supabaseClient";
 interface Task {
   id: number;
   title: string;
-  reward: number;
-  category: string;
+  reward: string;
   link: string;
 }
 
+// Lista e detyrave fikse (që të shfaqen gjithmonë në ekran)
+const DEFAULT_TASKS: Task[] = [
+  {
+    id: 1,
+    title: "Join Official Telegram Channel",
+    reward: "+$0.50 USDT",
+    link: "https://t.me/your_channel_here", // Ndryshoje me linkun e kanalit tënd
+  },
+  {
+    id: 2,
+    title: "Subscribe to YouTube Channel",
+    reward: "+$0.50 USDT",
+    link: "https://youtube.com",
+  },
+  {
+    id: 3,
+    title: "Follow on X (Twitter)",
+    reward: "+$0.25 USDT",
+    link: "https://x.com",
+  },
+];
+
 export default function Tasks() {
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<Task[]>(DEFAULT_TASKS);
   const [adsWatched, setAdsWatched] = useState<number>(0);
   const [loadingAd, setLoadingAd] = useState<boolean>(false);
   const [telegramUser, setTelegramUser] = useState<any>(null);
@@ -45,8 +66,15 @@ export default function Tasks() {
 
   const fetchTasks = async () => {
     const { data, error } = await supabase.from("tasks").select("*");
-    if (!error && data) {
-      setTasks(data);
+    if (!error && data && data.length > 0) {
+      // Nëse ka detyra në Supabase i merr ato, përndryshe mban DEFAULT_TASKS
+      const formattedTasks = data.map((t: any) => ({
+        id: t.id,
+        title: t.title,
+        reward: `+$${(t.reward / 1000).toFixed(2)} USDT`,
+        link: t.link,
+      }));
+      setTasks(formattedTasks);
     }
   };
 
@@ -74,7 +102,6 @@ export default function Tasks() {
 
         const currentPoints = user?.points || 0;
 
-        // I shtohen 50 pikë (që korrespondojnë me $0.05 USDT)
         await supabase
           .from("users")
           .update({
@@ -102,7 +129,7 @@ export default function Tasks() {
 
       await supabase
         .from("users")
-        .update({ points: currentPoints + task.reward })
+        .update({ points: currentPoints + 500 })
         .eq("telegram_id", telegramUser.id);
     }
   };
@@ -168,7 +195,7 @@ export default function Tasks() {
             <div>
               <div style={{ fontWeight: "600", fontSize: "14px", marginBottom: "4px" }}>{task.title}</div>
               <div style={{ fontSize: "12px", color: "#22c55e", fontWeight: "bold" }}>
-                +${(task.reward / 1000).toFixed(2)} USDT
+                {task.reward}
               </div>
             </div>
             <button
