@@ -1,180 +1,198 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "../supabaseClient";
 
 interface Task {
   id: number;
   title: string;
   reward: number;
-  category: "crypto" | "affiliate" | "telegram";
+  category: string;
   link: string;
-  completed: boolean;
 }
 
 export default function Tasks() {
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [adsWatched, setAdsWatched] = useState<number>(0);
-  const maxDailyAds = 20;
+  const [loadingAd, setLoadingAd] = useState<boolean>(false);
+  const [telegramUser, setTelegramUser] = useState<any>(null);
 
-  // LISTA E PLOTË E LINQEVE TË TUA DHE AIRDROPS KRYESORE
-  const [tasks, setTasks] = useState<Task[]>([
-    {
-      id: 1,
-      title: "Join Blum Airdrop & Earn Points",
-      reward: 500,
-      category: "crypto",
-      link: "https://t.me/blum/app?startapp=ref_LL9thrrMxR",
-      completed: false,
-    },
-    {
-      id: 2,
-      title: "Claim TonWave Mining Bonus",
-      reward: 450,
-      category: "crypto",
-      link: "https://t.me/TonWave_1Bot/ton?startapp=8508477699",
-      completed: false,
-    },
-    {
-      id: 3,
-      title: "Start Bitcoin Crane Web Mining",
-      reward: 350,
-      category: "crypto",
-      link: "https://www.bitcoincrane.com?ref=b216127",
-      completed: false,
-    },
-    {
-      id: 4,
-      title: "Join Bitcoin Crane Telegram Bot",
-      reward: 300,
-      category: "telegram",
-      link: "https://t.me/BitcoinCrane_bot?start=b216127",
-      completed: false,
-    },
-    {
-      id: 5,
-      title: "Claim Money Plus App Reward",
-      reward: 400,
-      category: "crypto",
-      link: "https://t.me/Money_Plus12_Bot/moneyplus?startapp=8508477699",
-      completed: false,
-    },
-    {
-      id: 6,
-      title: "Claim Cash Plus Bonus",
-      reward: 400,
-      category: "crypto",
-      link: "https://t.me/CashPlus_Bot/cashplus?startapp=8508477699",
-      completed: false,
-    },
-    {
-      id: 7,
-      title: "Join Admitad Partner Network",
-      reward: 600,
-      category: "affiliate",
-      link: "https://www.admitad.com/affiliate-publishers/?ref=kaw95ey05k",
-      completed: false,
-    },
-    {
-      id: 8,
-      title: "Join PAWS Viral Telegram Airdrop",
-      reward: 500,
-      category: "crypto",
-      link: "https://t.me/PAWSOGBot",
-      completed: false,
-    },
-  ]);
+  // Linku yt nga Monetag
+  const MONETAG_DIRECT_LINK = "https://omg10.com/4/10168362";
 
-  const handleWatchAd = () => {
-    if (adsWatched >= maxDailyAds) {
-      alert("Daily limit reached! Come back tomorrow.");
-      return;
+  useEffect(() => {
+    // 1. Lexo të dhënat e përdoruesit nga Telegram
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      const user = tg.initDataUnsafe?.user;
+      if (user) {
+        setTelegramUser(user);
+        fetchUserData(user.id);
+      }
     }
-    alert("Loading sponsored video ad...");
-    setAdsWatched((prev) => prev + 1);
+
+    // 2. Lexo detyrat nga Supabase
+    fetchTasks();
+  }, []);
+
+  const fetchUserData = async (telegramId: number) => {
+    const { data } = await supabase
+      .from("users")
+      .select("ads_watched")
+      .eq("telegram_id", telegramId)
+      .single();
+
+    if (data && data.ads_watched !== undefined) {
+      setAdsWatched(data.ads_watched);
+    }
   };
 
-  const handleCompleteTask = (task: Task) => {
+  const fetchTasks = async () => {
+    const { data, error } = await supabase.from("tasks").select("*");
+    if (!error && data) {
+      setTasks(data);
+    }
+  };
+
+  // Funksioni për shikimin e reklamës
+  const handleWatchAd = async () => {
+    if (adsWatched >= 20) {
+      alert("You have reached the daily limit of 20 ads!");
+      return;
+    }
+
+    setLoadingAd(true);
+
+    // Hap reklamën Monetag në dritare të re
+    window.open(MONETAG_DIRECT_LINK, "_blank");
+
+    // Pas 2.5 sekondash shton pikët te përdoruesi
+    setTimeout(async () => {
+      setLoadingAd(false);
+      const newAdsCount = adsWatched + 1;
+      setAdsWatched(newAdsCount);
+
+      if (telegramUser) {
+        const { data: user } = await supabase
+          .from("users")
+          .select("points")
+          .eq("telegram_id", telegramUser.id)
+          .single();
+
+        const currentPoints = user?.points || 0;
+
+        await supabase
+          .from("users")
+          .update({
+            points: currentPoints + 50,
+            ads_watched: newAdsCount,
+          })
+          .eq("telegram_id", telegramUser.id);
+      }
+
+      alert("🎉 You watched an ad and earned +50 PTS!");
+    }, 2500);
+  };
+
+  // Funksioni për Airdrops / Offers
+  const handleStartTask = async (task: Task) => {
     window.open(task.link, "_blank");
-    setTasks((prev) =>
-      prev.map((t) => (t.id === task.id ? { ...t, completed: true } : t))
-    );
+
+    if (telegramUser) {
+      const { data: user } = await supabase
+        .from("users")
+        .select("points")
+        .eq("telegram_id", telegramUser.id)
+        .single();
+
+      const currentPoints = user?.points || 0;
+
+      await supabase
+        .from("users")
+        .update({ points: currentPoints + task.reward })
+        .eq("telegram_id", telegramUser.id);
+    }
   };
 
   return (
-    <div style={{ padding: "16px", color: "#fff", paddingBottom: "80px" }}>
-      <h2 style={{ marginBottom: "16px", fontSize: "20px" }}>Earn Rewards</h2>
+    <div style={{ padding: "16px", color: "#fff", fontFamily: "sans-serif", paddingBottom: "90px" }}>
+      <h2 style={{ fontSize: "22px", fontWeight: "bold", marginBottom: "16px" }}>Earn Rewards</h2>
 
-      {/* WATCH ADS SECTION */}
+      {/* Watch Ads Card */}
       <div style={{
-        background: "linear-gradient(135deg, #1e293b, #0f172a)",
+        background: "#1e293b",
         padding: "16px",
         borderRadius: "16px",
         border: "1px solid #334155",
-        marginBottom: "20px"
+        marginBottom: "24px"
       }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
           <div>
             <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", color: "#38bdf8" }}>🎬 Watch Ads & Earn</h3>
             <p style={{ margin: 0, fontSize: "12px", color: "#94a3b8" }}>Watch up to 20 ads daily (+50 PTS each)</p>
           </div>
-          <span style={{ fontSize: "14px", fontWeight: "bold", color: "#eab308" }}>
-            {adsWatched}/{maxDailyAds}
+          <span style={{ fontWeight: "bold", color: "#eab308", fontSize: "14px" }}>
+            {adsWatched}/20
           </span>
         </div>
 
         <button
           onClick={handleWatchAd}
-          disabled={adsWatched >= maxDailyAds}
+          disabled={loadingAd || adsWatched >= 20}
           style={{
             width: "100%",
             padding: "12px",
             borderRadius: "10px",
             border: "none",
-            background: adsWatched >= maxDailyAds ? "#475569" : "#22c55e",
+            background: adsWatched >= 20 ? "#475569" : "#16a34a",
             color: "#fff",
             fontWeight: "bold",
             fontSize: "14px",
-            cursor: adsWatched >= maxDailyAds ? "not-allowed" : "pointer"
+            cursor: adsWatched >= 20 ? "not-allowed" : "pointer"
           }}
         >
-          {adsWatched >= maxDailyAds ? "Daily Limit Reached" : "Watch Video Ad (+50 PTS)"}
+          {loadingAd ? "Loading sponsored video ad..." : "Watch Video Ad (+50 PTS)"}
         </button>
       </div>
 
-      {/* FEATURED OFFERS & AIRDROPS */}
-      <h3 style={{ fontSize: "16px", marginBottom: "12px" }}>🚀 Top Offers & Airdrops</h3>
-      {tasks.map((task) => (
-        <div
-          key={task.id}
-          style={{
-            background: "#1e293b",
-            padding: "14px",
-            borderRadius: "12px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "10px",
-            border: "1px solid #334155"
-          }}
-        >
-          <div>
-            <div style={{ fontWeight: "bold", fontSize: "14px" }}>{task.title}</div>
-            <div style={{ fontSize: "12px", color: "#38bdf8", marginTop: "2px" }}>+{task.reward} PTS</div>
-          </div>
-          <button
-            onClick={() => handleCompleteTask(task)}
-            disabled={task.completed}
+      {/* Top Offers & Airdrops */}
+      <h3 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "12px" }}>🚀 Top Offers & Airdrops</h3>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        {tasks.map((task) => (
+          <div
+            key={task.id}
             style={{
-              backgroundColor: task.completed ? "#475569" : "#0284c7",
-              color: "#fff",
-              border: "none",
-              padding: "8px 16px",
-              borderRadius: "8px",
-              fontWeight: "bold",
-              cursor: task.completed ? "not-allowed" : "pointer"
+              background: "#1e293b",
+              padding: "14px 16px",
+              borderRadius: "14px",
+              border: "1px solid #334155",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
             }}
           >
-            {task.completed ? "Done" : "Start"}
-          </button>
-        </div>
-      ))}
+            <div>
+              <div style={{ fontWeight: "600", fontSize: "14px", marginBottom: "4px" }}>{task.title}</div>
+              <div style={{ fontSize: "12px", color: "#38bdf8", fontWeight: "bold" }}>+{task.reward} PTS</div>
+            </div>
+            <button
+              onClick={() => handleStartTask(task)}
+              style={{
+                padding: "8px 18px",
+                borderRadius: "8px",
+                border: "none",
+                background: "#0284c7",
+                color: "#fff",
+                fontWeight: "bold",
+                fontSize: "13px",
+                cursor: "pointer"
+              }}
+            >
+              Start
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
