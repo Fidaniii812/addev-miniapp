@@ -1,27 +1,76 @@
-import { useState, useEffect } from "react";
-import Layout from "./components/Layout";
+import { useState } from "react";
 import Home from "./pages/Home";
 import Tasks from "./pages/Tasks";
 import Wallet from "./pages/Wallet";
-import Community from "./pages/Community";
-import Profile from "./pages/Profile";
-import { initializeTelegram } from "./lib/telegram";
 
 export default function App() {
-  const [page, setPage] = useState("home");
-
-  useEffect(() => {
-    // Inicializon Telegram WebApp automatikisht
-    initializeTelegram();
-  }, []);
+  const [activeTab, setActiveTab] = useState<"home" | "tasks" | "wallet">("home");
 
   return (
-    <Layout currentPage={page} onChangePage={setPage}>
-      {page === "home" && <Home />}
-      {page === "tasks" && <Tasks />}
-      {page === "wallet" && <Wallet />}
-      {page === "community" && <Community />}
-      {page === "profile" && <Profile />}
-    </Layout>
+    <div style={{ background: "#0f172a", minHeight: "100vh", color: "#fff" }}>
+      {/* Përmbajtja e Faqes */}
+      <main style={{ maxWidth: "500px", margin: "0 auto" }}>
+        {activeTab === "home" && <Home />}
+        {activeTab === "tasks" && <Tasks />}
+        {activeTab === "wallet" && <Wallet />}
+      </main>
+
+      {/* Bottom Navigation Menu */}
+      <nav style={{
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        background: "#1e293b",
+        borderTop: "1px solid #334155",
+        display: "flex",
+        justifyContent: "space-around",
+        padding: "12px 0",
+        maxWidth: "500px",
+        margin: "0 auto"
+      }}>
+        <button
+          onClick={() => setActiveTab("home")}
+          style={{
+            background: "none",
+            border: "none",
+            color: activeTab === "home" ? "#38bdf8" : "#94a3b8",
+            fontWeight: activeTab === "home" ? "bold" : "normal",
+            cursor: "pointer",
+            fontSize: "14px"
+          }}
+        >
+          🏠 Kryesore
+        </button>
+
+        <button
+          onClick={() => setActiveTab("tasks")}
+          style={{
+            background: "none",
+            border: "none",
+            color: activeTab === "tasks" ? "#38bdf8" : "#94a3b8",
+            fontWeight: activeTab === "tasks" ? "bold" : "normal",
+            cursor: "pointer",
+            fontSize: "14px"
+          }}
+        >
+          🎯 Detyrat
+        </button>
+
+        <button
+          onClick={() => setActiveTab("wallet")}
+          style={{
+            background: "none",
+            border: "none",
+            color: activeTab === "wallet" ? "#38bdf8" : "#94a3b8",
+            fontWeight: activeTab === "wallet" ? "bold" : "normal",
+            cursor: "pointer",
+            fontSize: "14px"
+          }}
+        >
+          👛 Portofoli
+        </button>
+      </nav>
+    </div>
   );
 }
