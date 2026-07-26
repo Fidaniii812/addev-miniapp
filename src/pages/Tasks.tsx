@@ -19,7 +19,6 @@ export default function Tasks() {
   const MONETAG_DIRECT_LINK = "https://omg10.com/4/10168362";
 
   useEffect(() => {
-    // 1. Lexo të dhënat e përdoruesit nga Telegram
     const tg = (window as any).Telegram?.WebApp;
     if (tg) {
       tg.ready();
@@ -29,8 +28,6 @@ export default function Tasks() {
         fetchUserData(user.id);
       }
     }
-
-    // 2. Lexo detyrat nga Supabase
     fetchTasks();
   }, []);
 
@@ -53,7 +50,7 @@ export default function Tasks() {
     }
   };
 
-  // Funksioni për shikimin e reklamës
+  // Funksioni për shikimin e reklamës ($0.05 USDT shpërblim)
   const handleWatchAd = async () => {
     if (adsWatched >= 20) {
       alert("You have reached the daily limit of 20 ads!");
@@ -61,11 +58,8 @@ export default function Tasks() {
     }
 
     setLoadingAd(true);
-
-    // Hap reklamën Monetag në dritare të re
     window.open(MONETAG_DIRECT_LINK, "_blank");
 
-    // Pas 2.5 sekondash shton pikët te përdoruesi
     setTimeout(async () => {
       setLoadingAd(false);
       const newAdsCount = adsWatched + 1;
@@ -80,6 +74,7 @@ export default function Tasks() {
 
         const currentPoints = user?.points || 0;
 
+        // I shtohen 50 pikë (që korrespondojnë me $0.05 USDT)
         await supabase
           .from("users")
           .update({
@@ -89,11 +84,10 @@ export default function Tasks() {
           .eq("telegram_id", telegramUser.id);
       }
 
-      alert("🎉 You watched an ad and earned +50 PTS!");
+      alert("🎉 Claimed +$0.05 USDT Bonus!");
     }, 2500);
   };
 
-  // Funksioni për Airdrops / Offers
   const handleStartTask = async (task: Task) => {
     window.open(task.link, "_blank");
 
@@ -115,22 +109,22 @@ export default function Tasks() {
 
   return (
     <div style={{ padding: "16px", color: "#fff", fontFamily: "sans-serif", paddingBottom: "90px" }}>
-      <h2 style={{ fontSize: "22px", fontWeight: "bold", marginBottom: "16px" }}>Earn Rewards</h2>
+      <h2 style={{ fontSize: "22px", fontWeight: "bold", marginBottom: "16px" }}>💵 Earn USDT Rewards</h2>
 
       {/* Watch Ads Card */}
       <div style={{
-        background: "#1e293b",
+        background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
         padding: "16px",
         borderRadius: "16px",
-        border: "1px solid #334155",
+        border: "1px solid #3b82f6",
         marginBottom: "24px"
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
           <div>
-            <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", color: "#38bdf8" }}>🎬 Watch Ads & Earn</h3>
-            <p style={{ margin: 0, fontSize: "12px", color: "#94a3b8" }}>Watch up to 20 ads daily (+50 PTS each)</p>
+            <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", color: "#38bdf8" }}>🎬 Watch Video Ad</h3>
+            <p style={{ margin: 0, fontSize: "12px", color: "#94a3b8" }}>Earn +$0.05 USDT for every ad (Max 20/day)</p>
           </div>
-          <span style={{ fontWeight: "bold", color: "#eab308", fontSize: "14px" }}>
+          <span style={{ fontWeight: "bold", color: "#22c55e", fontSize: "14px" }}>
             {adsWatched}/20
           </span>
         </div>
@@ -143,19 +137,19 @@ export default function Tasks() {
             padding: "12px",
             borderRadius: "10px",
             border: "none",
-            background: adsWatched >= 20 ? "#475569" : "#16a34a",
+            background: adsWatched >= 20 ? "#475569" : "linear-gradient(90deg, #16a34a, #22c55e)",
             color: "#fff",
             fontWeight: "bold",
             fontSize: "14px",
             cursor: adsWatched >= 20 ? "not-allowed" : "pointer"
           }}
         >
-          {loadingAd ? "Loading sponsored video ad..." : "Watch Video Ad (+50 PTS)"}
+          {loadingAd ? "Loading Sponsored Ad..." : "Watch Ad & Claim +$0.05 USDT"}
         </button>
       </div>
 
       {/* Top Offers & Airdrops */}
-      <h3 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "12px" }}>🚀 Top Offers & Airdrops</h3>
+      <h3 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "12px" }}>🚀 High-Paying Tasks</h3>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         {tasks.map((task) => (
@@ -173,7 +167,9 @@ export default function Tasks() {
           >
             <div>
               <div style={{ fontWeight: "600", fontSize: "14px", marginBottom: "4px" }}>{task.title}</div>
-              <div style={{ fontSize: "12px", color: "#38bdf8", fontWeight: "bold" }}>+{task.reward} PTS</div>
+              <div style={{ fontSize: "12px", color: "#22c55e", fontWeight: "bold" }}>
+                +${(task.reward / 1000).toFixed(2)} USDT
+              </div>
             </div>
             <button
               onClick={() => handleStartTask(task)}
