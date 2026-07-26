@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
 import { getTelegramWebApp } from "../lib/telegram";
 
-type TelegramUser = {
+export type TelegramUser = {
   id: number;
-  first_name: string;
-  last_name?: string;
   username?: string;
-  language_code?: string;
+  first_name: string;
 };
 
 export default function useTelegramUser() {
@@ -15,10 +14,28 @@ export default function useTelegramUser() {
   useEffect(() => {
     const tg = getTelegramWebApp();
 
-    if (tg?.initDataUnsafe?.user) {
-      setUser(tg.initDataUnsafe.user);
-    }
+    if (!tg?.initDataUnsafe?.user) return;
+
+    const telegramUser = tg.initDataUnsafe.user;
+
+    setUser(telegramUser);
+
+    saveUser(telegramUser);
   }, []);
+
+  async function saveUser(telegramUser: TelegramUser) {
+    const { error } = await supabase
+      .from("users")
+      .upsert({
+        telegram_id: telegramUser.id,
+        username: telegramUser.username ?? "",
+        first_name: telegramUser.first_name,
+      });
+
+    if (error) {
+      console.log(error);
+    }
+  }
 
   return user;
 }
