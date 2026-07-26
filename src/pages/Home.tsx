@@ -1,8 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function Home() {
   const [points, setPoints] = useState<number>(1250);
   const [claimedToday, setClaimedToday] = useState<boolean>(false);
+
+  useEffect(() => {
+    // I thotë Telegramit ta hapë aplikacionin në Full Screen
+    if ((window as any).Telegram?.WebApp) {
+      (window as any).Telegram.WebApp.ready();
+      (window as any).Telegram.WebApp.expand();
+    }
+  }, []);
 
   const handleDailyClaim = () => {
     if (claimedToday) return;
@@ -12,7 +20,7 @@ export default function Home() {
   };
 
   return (
-    <div style={{ padding: "16px", color: "#fff", fontFamily: "sans-serif", paddingBottom: "80px" }}>
+    <div style={{ padding: "16px", color: "#fff", fontFamily: "sans-serif", paddingBottom: "80px", minHeight: "100vh" }}>
       {/* Main Banner */}
       <div style={{
         background: "linear-gradient(135deg, #0284c7, #0f172a)",
