@@ -6,10 +6,10 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [adcBalance, setAdcBalance] = useState<number>(0);
   const [adsToday, setAdsToday] = useState<number>(0);
-  
+
   // Mining States
   const [miningLevel, setMiningLevel] = useState<number>(1);
-  const [miningRate, setMiningRate] = useState<number>(20); // 20 ADC/hr
+  const [miningRate, setMiningRate] = useState<number>(20);
   const [miningActive, setMiningActive] = useState<boolean>(false);
   const [miningEndTime, setMiningEndTime] = useState<number | null>(null);
   const [timeLeftStr, setTimeLeftStr] = useState<string>("");
@@ -17,15 +17,24 @@ export default function App() {
   // Wallet State
   const [walletAddress, setWalletAddress] = useState<string>("");
 
-  // LINKS
+  // =========================================================
+  // ⚙️ KONFIGURIMI I LINKEVE DHE BOT-IT TËND:
+  // =========================================================
+  const BOT_USERNAME = "sddev_rewards_bot"; // Username i bot-it tënd
   const MONETAG_LINK = "https://omg10.com/4/10168362";
-  const BOT_USERNAME = "your_bot_username";
+
+  // Linket e tua personale:
+  const ADMITAD_AFFILIATE_LINK = "https://tatrck.com/h/0Hu30--d0OU9?model=cpa";
+  const MAJOR_TELEGRAM_LINK = "https://t.me/major/start?startapp=8508477699";
+  const ADDEV_STUDIO_LINK = "https://addev-studio.com";
+  const ADDEV_DEALS_LINK = "https://addev-studio.com/deals";
+  // =========================================================
 
   useEffect(() => {
     initTelegramUser();
   }, []);
 
-  // Timer i Mining 24 Orësh
+  // Mining Timer Countdown
   useEffect(() => {
     let interval: any = null;
     if (miningActive && miningEndTime) {
@@ -35,7 +44,7 @@ export default function App() {
 
         if (diff <= 0) {
           setMiningActive(false);
-          setTimeLeftStr("Gati për Claim!");
+          setTimeLeftStr("Ready to Claim!");
           clearInterval(interval);
         } else {
           const hours = Math.floor(diff / (1000 * 60 * 60));
@@ -68,13 +77,16 @@ export default function App() {
           setAdcBalance(existingUser.adc_balance || 0);
           setAdsToday(existingUser.ads_watched_today || 0);
           setMiningLevel(existingUser.mining_level || 1);
-          setMiningRate(existingUser.mining_level === 2 ? 40 : 20);
+          setMiningRate(existingUser.mining_rate || 20);
 
           if (existingUser.mining_end_time) {
             const end = new Date(existingUser.mining_end_time).getTime();
+            setMiningEndTime(end);
             if (end > Date.now()) {
               setMiningActive(true);
-              setMiningEndTime(end);
+            } else {
+              setMiningActive(false);
+              setTimeLeftStr("Ready to Claim!");
             }
           }
         } else {
@@ -98,16 +110,16 @@ export default function App() {
             .single();
 
           if (newUser) {
-            setAdcBalance(newUser.adc_balance);
+            setAdcBalance(newUser.adc_balance || 0);
           }
         }
       }
     }
   };
 
-  // Nisfja e Mining Falas (24 Orë)
+  // Start Mining
   const handleStartMining = async () => {
-    const endTime = Date.now() + 24 * 60 * 60 * 1000; // 24 orë në ms
+    const endTime = Date.now() + 24 * 60 * 60 * 1000;
     const endIso = new Date(endTime).toISOString();
 
     setMiningActive(true);
@@ -121,9 +133,9 @@ export default function App() {
     }
   };
 
-  // Claim i Minimit pas 24 orëve (Rate * 24 orë)
+  // Claim Mining
   const handleClaimMining = async () => {
-    const reward = miningRate * 24; // 20 * 24 = 480 ADC (ose 960 për Lvl 2)
+    const reward = miningRate * 24;
     const newBalance = adcBalance + reward;
 
     setAdcBalance(newBalance);
@@ -141,14 +153,14 @@ export default function App() {
         .eq("telegram_id", user.id);
     }
 
-    alert(`🎉 Mblodhët +${reward} ADC! Mund ta nisni përsëri sessions-in e mining.`);
+    alert(`🎉 Successfully claimed +${reward} ADC!`);
   };
 
-  // Upgrade me Telegram Stars
+  // Upgrade Mining
   const handleUpgradeWithStars = async () => {
     const tg = (window as any).Telegram?.WebApp;
     if (tg && tg.openInvoice) {
-      alert("⭐ Po hapet dritarja e pagesës me Telegram Stars...");
+      alert("⭐ Opening Telegram Stars payment...");
     } else {
       setMiningLevel(2);
       setMiningRate(40);
@@ -158,14 +170,14 @@ export default function App() {
           .update({ mining_level: 2, mining_rate: 40 })
           .eq("telegram_id", user.id);
       }
-      alert("🚀 Mining u rrit në Level 2 (40 ADC / orë)!");
+      alert("🚀 Mining upgraded to Level 2 (40 ADC / hr)!");
     }
   };
 
-  // Shiko Reklamë (+50 ADC)
+  // Watch Ad
   const handleWatchAd = async () => {
     if (adsToday >= 20) {
-      alert("Keni arritur limitin ditor prej 20 reklamash!");
+      alert("You have reached the daily limit of 20 ads!");
       return;
     }
 
@@ -188,29 +200,28 @@ export default function App() {
           .eq("telegram_id", user.id);
       }
 
-      alert("🎉 Fitove +50 ADC!");
+      alert("🎉 Earned +50 ADC!");
     }, 2000);
   };
 
-  // Kërkesa për Tërheqje (Withdraw)
+  // Withdraw
   const handleWithdrawRequest = async () => {
     if (!walletAddress || walletAddress.trim().length < 10) {
-      alert("Ju lutem vendosni një adresë të vlefshme kuateli (Wallet Address)!");
+      alert("Please enter a valid wallet address!");
       return;
     }
 
     if (adcBalance < 15000) {
-      alert("Nuk keni bilanc të mjaftueshëm për tërheqje (Min: 15,000 ADC)!");
+      alert("Insufficient balance (Minimum: 15,000 ADC)!");
       return;
     }
 
     const newBalance = adcBalance - 15000;
 
-    // Ruajtja te tabela 'withdrawals' në Supabase
     const { error } = await supabase.from("withdrawals").insert([
       {
         telegram_id: user?.id || 0,
-        username: user?.username || "Përdorues",
+        username: user?.username || "User",
         amount: 15000,
         wallet_address: walletAddress,
         status: "pending",
@@ -225,10 +236,10 @@ export default function App() {
           .update({ adc_balance: newBalance })
           .eq("telegram_id", user.id);
       }
-      alert("✅ Kërkesa për tërheqje prej $15.00 USDT u dërgua me sukses!");
+      alert("✅ Withdrawal request submitted successfully!");
       setWalletAddress("");
     } else {
-      alert("Pasi ndodhi një gabim, ju lutem provoni përsëri.");
+      alert("Error submitting withdrawal. Please try again.");
     }
   };
 
@@ -236,12 +247,12 @@ export default function App() {
 
   return (
     <div style={{ background: "#0f172a", minHeight: "100vh", color: "#fff", fontFamily: "sans-serif", paddingBottom: "90px" }}>
-      {/* Header me ID e Lojtarit */}
+      {/* Header */}
       <div style={{ background: "#1e293b", padding: "16px", borderBottom: "1px solid #334155", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <div style={{ fontWeight: "bold", fontSize: "16px" }}>{user?.first_name || "Përdorues"}</div>
+          <div style={{ fontWeight: "bold", fontSize: "16px" }}>{user?.first_name || "User"}</div>
           <div style={{ fontSize: "11px", color: "#38bdf8", marginTop: "2px" }}>
-            🆔 ID: <span style={{ fontFamily: "monospace" }}>{user?.id || "123456789"}</span>
+            🆔 ID: <span style={{ fontFamily: "monospace" }}>{user?.id || "N/A"}</span>
           </div>
         </div>
         <div style={{ background: "#0f172a", padding: "6px 12px", borderRadius: "20px", border: "1px solid #38bdf8", textAlign: "right" }}>
@@ -257,7 +268,7 @@ export default function App() {
           <div>
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>🏠 Dashboard</h2>
             <div style={{ background: "linear-gradient(135deg, #0284c7, #0369a1)", padding: "20px", borderRadius: "16px", textAlign: "center", marginBottom: "16px" }}>
-              <div style={{ fontSize: "13px", color: "#e0f2fe" }}>Bilanci Total</div>
+              <div style={{ fontSize: "13px", color: "#e0f2fe" }}>Total Balance</div>
               <div style={{ fontSize: "32px", fontWeight: "bold", margin: "6px 0" }}>${usdtEquivalent} USDT</div>
               <div style={{ fontSize: "12px", color: "#bae6fd" }}>({adcBalance.toLocaleString()} ADC)</div>
             </div>
@@ -269,41 +280,40 @@ export default function App() {
           <div>
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>⛏️ Cloud Mining</h2>
             <div style={{ background: "#1e293b", padding: "20px", borderRadius: "16px", border: "1px solid #334155", textAlign: "center", marginBottom: "16px" }}>
-              <div style={{ fontSize: "12px", color: "#94a3b8" }}>Niveli i Mining: Level {miningLevel}</div>
+              <div style={{ fontSize: "12px", color: "#94a3b8" }}>Mining Speed Level {miningLevel}</div>
               <div style={{ fontSize: "28px", fontWeight: "bold", color: "#38bdf8", margin: "8px 0" }}>
-                {miningRate} ADC / orë
+                {miningRate} ADC / hour
               </div>
 
               {/* Status Box */}
               <div style={{ background: "#0f172a", padding: "14px", borderRadius: "12px", margin: "16px 0", border: "1px solid #1e293b" }}>
                 {miningActive ? (
                   <>
-                    <div style={{ fontSize: "12px", color: "#94a3b8" }}>Koha e mbetur e Mining:</div>
+                    <div style={{ fontSize: "12px", color: "#94a3b8" }}>Time Remaining:</div>
                     <div style={{ fontSize: "20px", fontWeight: "bold", color: "#eab308", marginTop: "4px" }}>{timeLeftStr}</div>
                   </>
                 ) : miningEndTime && !miningActive ? (
                   <>
-                    <div style={{ fontSize: "12px", color: "#94a3b8" }}>Mining përfundoi!</div>
-                    <div style={{ fontSize: "18px", fontWeight: "bold", color: "#22c55e", marginTop: "4px" }}>+{miningRate * 24} ADC Gati</div>
+                    <div style={{ fontSize: "12px", color: "#94a3b8" }}>Mining Complete!</div>
+                    <div style={{ fontSize: "18px", fontWeight: "bold", color: "#22c55e", marginTop: "4px" }}>+{miningRate * 24} ADC Ready</div>
                   </>
                 ) : (
-                  <div style={{ fontSize: "13px", color: "#94a3b8" }}>Miningu nuk është aktiv. Kliko më poshtë për ta nisur 24 Orë Falas!</div>
+                  <div style={{ fontSize: "13px", color: "#94a3b8" }}>Mining is inactive. Click below to start 24 Hours free mining!</div>
                 )}
               </div>
 
-              {/* Action Button */}
               {!miningActive && !miningEndTime && (
                 <button
                   onClick={handleStartMining}
                   style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: "linear-gradient(90deg, #0284c7, #38bdf8)", color: "#fff", fontWeight: "bold", cursor: "pointer" }}
                 >
-                  ▶ Fillo Mining (24 Orë Falas)
+                  ▶ Start Mining (24 Hours Free)
                 </button>
               )}
 
               {miningActive && (
                 <button disabled style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: "#334155", color: "#94a3b8", fontWeight: "bold" }}>
-                  ⏳ Mining në proces...
+                  ⏳ Mining in Progress...
                 </button>
               )}
 
@@ -317,24 +327,23 @@ export default function App() {
               )}
             </div>
 
-            {/* Upgrade Options */}
             {miningLevel < 2 && (
               <div style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)", padding: "16px", borderRadius: "16px", border: "1px solid #eab308" }}>
-                <h3 style={{ margin: "0 0 8px 0", fontSize: "16px", color: "#eab308" }}>⚡ Rrite Miningun në 40 ADC/orë</h3>
-                <p style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "12px" }}>Dyfisho prodhimin ditor të ADC-ve:</p>
+                <h3 style={{ margin: "0 0 8px 0", fontSize: "16px", color: "#eab308" }}>⚡ Boost Speed to 40 ADC/hr</h3>
+                <p style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "12px" }}>Double your daily ADC production:</p>
 
                 <button
                   onClick={handleUpgradeWithStars}
                   style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: "linear-gradient(90deg, #eab308, #ca8a04)", color: "#000", fontWeight: "bold", marginBottom: "10px", cursor: "pointer" }}
                 >
-                  ⭐ Blej me 50 Telegram Stars
+                  ⭐ Upgrade with 50 Telegram Stars
                 </button>
 
                 <button
                   onClick={() => setActiveTab("tasks")}
                   style={{ width: "100%", padding: "10px", borderRadius: "10px", border: "1px solid #38bdf8", background: "transparent", color: "#38bdf8", fontWeight: "bold", cursor: "pointer" }}
                 >
-                  📋 Kryej Detyrat për Upgrade (Falas)
+                  📋 Complete Tasks to Upgrade (Free)
                 </button>
               </div>
             )}
@@ -344,53 +353,66 @@ export default function App() {
         {/* 📺 ADS */}
         {activeTab === "ads" && (
           <div>
-            <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>📺 Monetag Video Ads</h2>
+            <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>📺 Watch & Earn</h2>
             <div style={{ background: "#1e293b", padding: "16px", borderRadius: "16px", border: "1px solid #38bdf8" }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: "16px" }}>Shiko Reklamë</h3>
-                  <div style={{ fontSize: "12px", color: "#94a3b8" }}>+50 ADC për çdo reklamë</div>
+                  <h3 style={{ margin: 0, fontSize: "16px" }}>Watch Video Ad</h3>
+                  <div style={{ fontSize: "12px", color: "#94a3b8" }}>+50 ADC per video</div>
                 </div>
                 <div style={{ fontWeight: "bold", color: "#22c55e" }}>{adsToday}/20</div>
               </div>
               <button onClick={handleWatchAd} disabled={adsToday >= 20} style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: adsToday >= 20 ? "#475569" : "#16a34a", color: "#fff", fontWeight: "bold", cursor: "pointer" }}>
-                {adsToday >= 20 ? "Limit Ditor U Arrit" : "Shiko Reklamën (+50 ADC)"}
+                {adsToday >= 20 ? "Daily Limit Reached" : "Watch Ad (+50 ADC)"}
               </button>
             </div>
           </div>
         )}
 
-        {/* 📋 TASKS (Më shumë detyra) */}
+        {/* 📋 TASKS */}
         {activeTab === "tasks" && (
           <div>
-            <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>📋 Partner Tasks</h2>
+            <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>📋 Featured Tasks</h2>
             
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {/* Task 1 */}
+              {/* Task 1: Admitad Affiliate */}
               <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontWeight: "bold", fontSize: "14px" }}>Join Telegram Channel</div>
-                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold" }}>+500 ADC</div>
+                  <div style={{ fontWeight: "bold", fontSize: "14px" }}>Check Special Offers</div>
+                  <div style={{ color: "#94a3b8", fontSize: "11px" }}>Explore top partner deals (Admitad)</div>
+                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+500 ADC</div>
                 </div>
-                <button onClick={() => window.open("https://t.me", "_blank")} style={{ background: "#0284c7", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>Start</button>
+                <button onClick={() => window.open(ADMITAD_AFFILIATE_LINK, "_blank")} style={{ background: "#0284c7", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>Start</button>
               </div>
 
-              {/* Task 2 */}
+              {/* Task 2: Major App */}
               <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontWeight: "bold", fontSize: "14px" }}>Subscribe on YouTube</div>
-                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold" }}>+300 ADC</div>
+                  <div style={{ fontWeight: "bold", fontSize: "14px" }}>Join Major App</div>
+                  <div style={{ color: "#94a3b8", fontSize: "11px" }}>Check out Major Telegram bot</div>
+                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+500 ADC</div>
                 </div>
-                <button onClick={() => window.open("https://youtube.com", "_blank")} style={{ background: "#0284c7", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>Start</button>
+                <button onClick={() => window.open(MAJOR_TELEGRAM_LINK, "_blank")} style={{ background: "#0284c7", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>Start</button>
               </div>
 
-              {/* Task 3 */}
+              {/* Task 3: AdDev Studio */}
               <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontWeight: "bold", fontSize: "14px" }}>Follow on X (Twitter)</div>
-                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold" }}>+200 ADC</div>
+                  <div style={{ fontWeight: "bold", fontSize: "14px" }}>Visit AdDev Studio</div>
+                  <div style={{ color: "#94a3b8", fontSize: "11px" }}>Discover addev-studio.com</div>
+                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+300 ADC</div>
                 </div>
-                <button onClick={() => window.open("https://x.com", "_blank")} style={{ background: "#0284c7", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>Start</button>
+                <button onClick={() => window.open(ADDEV_STUDIO_LINK, "_blank")} style={{ background: "#0284c7", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>Start</button>
+              </div>
+
+              {/* Task 4: AdDev Deals */}
+              <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontWeight: "bold", fontSize: "14px" }}>Explore AdDev Deals</div>
+                  <div style={{ color: "#94a3b8", fontSize: "11px" }}>Check latest exclusive discounts</div>
+                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+400 ADC</div>
+                </div>
+                <button onClick={() => window.open(ADDEV_DEALS_LINK, "_blank")} style={{ background: "#0284c7", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>Start</button>
               </div>
             </div>
           </div>
@@ -399,28 +421,28 @@ export default function App() {
         {/* 👥 INVITE */}
         {activeTab === "invite" && (
           <div>
-            <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>👥 Fto Miqtë</h2>
+            <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>👥 Invite Friends</h2>
             <div style={{ background: "#1e293b", padding: "20px", borderRadius: "16px", textAlign: "center", border: "1px solid #334155" }}>
               <div style={{ fontSize: "40px", marginBottom: "8px" }}>🎁</div>
-              <h3 style={{ margin: "0 0 8px 0" }}>Fitoni +1,000 ADC</h3>
+              <h3 style={{ margin: "0 0 8px 0" }}>Earn +1,000 ADC</h3>
               <p style={{ fontSize: "13px", color: "#94a3b8", marginBottom: "16px" }}>
-                Ftoni miqtë tuaj dhe fitoni 1,000 ADC për çdo përdorues që regjistrohet me linkun tuaj!
+                Invite your friends and earn 1,000 ADC for each user who joins using your referral link!
               </p>
               <button
                 onClick={() => {
                   const refLink = `https://t.me/${BOT_USERNAME}?start=${user?.id || ""}`;
                   navigator.clipboard.writeText(refLink);
-                  alert("Linku i ftesës u kopjua me sukses!");
+                  alert(`Referral link copied: ${refLink}`);
                 }}
                 style={{ width: "100%", padding: "12px", background: "#0284c7", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" }}
               >
-                📋 Kopjo Linkun e Ftesës
+                📋 Copy Referral Link
               </button>
             </div>
           </div>
         )}
 
-        {/* 💰 WALLET & WITHDRAWAL FORM */}
+        {/* 💰 WALLET */}
         {activeTab === "wallet" && (
           <div>
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>💰 Wallet & Withdraw</h2>
@@ -430,11 +452,11 @@ export default function App() {
 
               <div style={{ marginTop: "16px", textAlign: "left" }}>
                 <label style={{ fontSize: "12px", color: "#94a3b8", display: "block", marginBottom: "6px" }}>
-                  Vendos Adresën e Portofolit (USDT / TON / TRC20):
+                  Enter Wallet Address (USDT / TON / TRC20):
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. TX123456789... ose EQ..."
+                  placeholder="e.g. TX123456789... or EQ..."
                   value={walletAddress}
                   onChange={(e) => setWalletAddress(e.target.value)}
                   style={{
@@ -464,7 +486,7 @@ export default function App() {
                   cursor: adcBalance >= 15000 ? "pointer" : "not-allowed"
                 }}
               >
-                {adcBalance >= 15000 ? "Dërgo Kërkesën për Tërheqje ($15 USDT)" : `Duhen edhe ${(15000 - adcBalance).toLocaleString()} ADC`}
+                {adcBalance >= 15000 ? "Submit Withdrawal Request ($15 USDT)" : `Need ${(15000 - adcBalance).toLocaleString()} more ADC`}
               </button>
             </div>
           </div>
