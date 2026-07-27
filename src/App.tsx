@@ -23,7 +23,8 @@ export default function App() {
 
   // ⚙️ LINKS & BOT CONFIGURATION
   const BOT_USERNAME = "addev_rewards_bot";
-  const BOT_TOKEN = "8662989224:AAHB2yQLDgQJrWPrG7xCKx7soQyaGdj__ww"; 
+  
+const BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN || "";
 
   const MONETAG_LINK = "https://omg10.com/4/10168362";
   const ADMITAD_AFFILIATE_LINK = "https://tatrck.com/h/0Hu30--d0OU9?model=cpa";
