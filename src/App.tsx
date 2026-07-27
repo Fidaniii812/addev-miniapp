@@ -23,9 +23,7 @@ export default function App() {
 
   // ⚙️ LINKS & BOT CONFIGURATION
   const BOT_USERNAME = "addev_rewards_bot";
-
-  // ⚠️ REPLACE THIS WITH YOUR ACTUAL TELEGRAM BOT TOKEN FROM BOTFATHER
-  const BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"; 
+  const BOT_TOKEN = "8662989224:AAHB2yQLDgQJrWPrG7xCKx7soQyaGdj__ww"; 
 
   const MONETAG_LINK = "https://omg10.com/4/10168362";
   const ADMITAD_AFFILIATE_LINK = "https://tatrck.com/h/0Hu30--d0OU9?model=cpa";
@@ -171,11 +169,6 @@ export default function App() {
     const tg = (window as any).Telegram?.WebApp;
     if (!tg) {
       alert("Telegram WebApp interface not found.");
-      return;
-    }
-
-    if (!BOT_TOKEN || BOT_TOKEN === "YOUR_BOT_TOKEN_HERE") {
-      alert("Please configure your BOT_TOKEN inside App.tsx first.");
       return;
     }
 
