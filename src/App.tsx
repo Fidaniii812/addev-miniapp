@@ -7,12 +7,16 @@ export default function App() {
   const [adcBalance, setAdcBalance] = useState<number>(0);
   const [adsToday, setAdsToday] = useState<number>(0);
 
-  // Mining States
+  // Mining States (Niveli i ulur: 5 ADC/orë)
   const [miningLevel, setMiningLevel] = useState<number>(1);
-  const [miningRate, setMiningRate] = useState<number>(20);
+  const [miningRate, setMiningRate] = useState<number>(5);
   const [miningActive, setMiningActive] = useState<boolean>(false);
   const [miningEndTime, setMiningEndTime] = useState<number | null>(null);
   const [timeLeftStr, setTimeLeftStr] = useState<string>("");
+
+  // Tasks verification states
+  const [completedTasks, setCompletedTasks] = useState<string[]>([]);
+  const [taskLoading, setTaskLoading] = useState<string | null>(null);
 
   // Wallet State
   const [walletAddress, setWalletAddress] = useState<string>("");
@@ -62,22 +66,17 @@ export default function App() {
       if (tgUser) {
         setUser(tgUser);
 
-        // Kërko përdoruesin në Supabase
-        const { data: existingUser, error } = await supabase
+        const { data: existingUser } = await supabase
           .from("users")
           .select("*")
           .eq("telegram_id", tgUser.id)
           .maybeSingle();
 
-        if (error) {
-          alert("Gabim gjatë leximit nga Supabase: " + error.message);
-        }
-
         if (existingUser) {
           setAdcBalance(existingUser.adc_balance || 0);
           setAdsToday(existingUser.ads_watched_today || 0);
           setMiningLevel(existingUser.mining_level || 1);
-          setMiningRate(existingUser.mining_rate || 20);
+          setMiningRate(existingUser.mining_rate || 5);
 
           if (existingUser.mining_end_time) {
             const end = new Date(existingUser.mining_end_time).getTime();
@@ -90,7 +89,6 @@ export default function App() {
             }
           }
         } else {
-          // Krijo përdoruesin me UPSERT nëse nuk ekziston
           const startParam = tg.initDataUnsafe?.start_param;
           const referrerId = startParam ? parseInt(startParam) : null;
 
@@ -101,19 +99,15 @@ export default function App() {
             adc_balance: 0,
             ads_watched_today: 0,
             mining_level: 1,
-            mining_rate: 20,
+            mining_rate: 5,
             referred_by: referrerId,
           };
 
-          const { data: createdUser, error: upsertError } = await supabase
+          const { data: createdUser } = await supabase
             .from("users")
             .upsert(newUserPayload, { onConflict: "telegram_id" })
             .select()
             .single();
-
-          if (upsertError) {
-            alert("Gabim gjatë krijimit të përdoruesit: " + upsertError.message);
-          }
 
           if (createdUser) {
             setAdcBalance(createdUser.adc_balance || 0);
@@ -123,10 +117,9 @@ export default function App() {
     }
   };
 
-  // Funksion ndihmës për të ruajtur ndryshimet direkt me Upsert
   const saveUserData = async (updatedFields: Record<string, any>) => {
     if (!user) return;
-    const { error } = await supabase.from("users").upsert(
+    await supabase.from("users").upsert(
       {
         telegram_id: user.id,
         username: user.username || "",
@@ -135,13 +128,9 @@ export default function App() {
       },
       { onConflict: "telegram_id" }
     );
-
-    if (error) {
-      alert("Gabim gjatë ruajtjes: " + error.message);
-    }
   };
 
-  // Start Mining
+  // Start Mining (24h)
   const handleStartMining = async () => {
     const endTime = Date.now() + 24 * 60 * 60 * 1000;
     const endIso = new Date(endTime).toISOString();
@@ -157,7 +146,7 @@ export default function App() {
 
   // Claim Mining
   const handleClaimMining = async () => {
-    const reward = miningRate * 24;
+    const reward = miningRate * 24; // 5 * 24 = 120 ADC
     const newBalance = adcBalance + reward;
 
     setAdcBalance(newBalance);
@@ -177,29 +166,25 @@ export default function App() {
   const handleUpgradeWithStars = async () => {
     const tg = (window as any).Telegram?.WebApp;
     if (tg && tg.openInvoice) {
-      alert("⭐ Opening Telegram Stars payment...");
+      // Kur të vendosësh faturën reale nga BotFather:
+      // tg.openInvoice("INVOICE_URL_KOT", (status) => { ... })
+      alert("⭐ Telegram Stars invoice will be opened here upon BotFather configuration.");
     } else {
-      setMiningLevel(2);
-      setMiningRate(40);
-      await saveUserData({
-        mining_level: 2,
-        mining_rate: 40,
-      });
-      alert("🚀 Mining upgraded to Level 2 (40 ADC / hr)!");
+      alert("⭐ Payment window initialized.");
     }
   };
 
-  // Watch Ad
+  // Watch Ad (Maksimumi 10 reklama në ditë / +10 ADC secila)
   const handleWatchAd = async () => {
-    if (adsToday >= 20) {
-      alert("You have reached the daily limit of 20 ads!");
+    if (adsToday >= 10) {
+      alert("Daily limit reached (10 Ads/day)!");
       return;
     }
 
     window.open(MONETAG_LINK, "_blank");
 
     setTimeout(async () => {
-      const newBalance = adcBalance + 50;
+      const newBalance = adcBalance + 10;
       const newAds = adsToday + 1;
 
       setAdcBalance(newBalance);
@@ -210,8 +195,29 @@ export default function App() {
         ads_watched_today: newAds,
       });
 
-      alert("🎉 Earned +50 ADC!");
-    }, 2000);
+      alert("🎉 Earned +10 ADC!");
+    }, 3000);
+  };
+
+  // Kryerja e Detyrave me Timer prej 10 sekondash
+  const handleCompleteTask = (taskId: string, link: string, reward: number) => {
+    if (completedTasks.includes(taskId)) {
+      alert("You have already completed this task!");
+      return;
+    }
+
+    window.open(link, "_blank");
+    setTaskLoading(taskId);
+
+    setTimeout(async () => {
+      const newBalance = adcBalance + reward;
+      setAdcBalance(newBalance);
+      setCompletedTasks((prev) => [...prev, taskId]);
+      setTaskLoading(null);
+
+      await saveUserData({ adc_balance: newBalance });
+      alert(`✅ Task verified! Earned +${reward} ADC!`);
+    }, 10000); // 10 sekonda vonesë për verifikim
   };
 
   // Withdraw
@@ -222,7 +228,7 @@ export default function App() {
     }
 
     if (adcBalance < 15000) {
-      alert("Insufficient balance (Minimum: 15,000 ADC)!");
+      alert("Minimum balance required: 15,000 ADC ($15 USDT)!");
       return;
     }
 
@@ -241,10 +247,10 @@ export default function App() {
     if (!error) {
       setAdcBalance(newBalance);
       await saveUserData({ adc_balance: newBalance });
-      alert("✅ Withdrawal request submitted successfully!");
+      alert("✅ Withdrawal request submitted! Processing time: 24-48h.");
       setWalletAddress("");
     } else {
-      alert("Error submitting withdrawal: " + error.message);
+      alert("Error submitting request: " + error.message);
     }
   };
 
@@ -302,13 +308,13 @@ export default function App() {
                     <div style={{ fontSize: "18px", fontWeight: "bold", color: "#22c55e", marginTop: "4px" }}>+{miningRate * 24} ADC Ready</div>
                   </>
                 ) : (
-                  <div style={{ fontSize: "13px", color: "#94a3b8" }}>Mining is inactive. Click below to start 24 Hours free mining!</div>
+                  <div style={{ fontSize: "13px", color: "#94a3b8" }}>Mining is inactive. Click below to start 24h free mining!</div>
                 )}
               </div>
 
               {!miningActive && !miningEndTime && (
                 <button onClick={handleStartMining} style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: "linear-gradient(90deg, #0284c7, #38bdf8)", color: "#fff", fontWeight: "bold", cursor: "pointer" }}>
-                  ▶ Start Mining (24 Hours Free)
+                  ▶ Start Mining (120 ADC / 24h)
                 </button>
               )}
 
@@ -327,13 +333,10 @@ export default function App() {
 
             {miningLevel < 2 && (
               <div style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)", padding: "16px", borderRadius: "16px", border: "1px solid #eab308" }}>
-                <h3 style={{ margin: "0 0 8px 0", fontSize: "16px", color: "#eab308" }}>⚡ Boost Speed to 40 ADC/hr</h3>
-                <p style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "12px" }}>Double your daily ADC production:</p>
-                <button onClick={handleUpgradeWithStars} style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: "linear-gradient(90deg, #eab308, #ca8a04)", color: "#000", fontWeight: "bold", marginBottom: "10px", cursor: "pointer" }}>
+                <h3 style={{ margin: "0 0 8px 0", fontSize: "16px", color: "#eab308" }}>⚡ Boost Speed to 10 ADC/hr</h3>
+                <p style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "12px" }}>Double your daily production (240 ADC/day):</p>
+                <button onClick={handleUpgradeWithStars} style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: "linear-gradient(90deg, #eab308, #ca8a04)", color: "#000", fontWeight: "bold", cursor: "pointer" }}>
                   ⭐ Upgrade with 50 Telegram Stars
-                </button>
-                <button onClick={() => setActiveTab("tasks")} style={{ width: "100%", padding: "10px", borderRadius: "10px", border: "1px solid #38bdf8", background: "transparent", color: "#38bdf8", fontWeight: "bold", cursor: "pointer" }}>
-                  📋 Complete Tasks to Upgrade (Free)
                 </button>
               </div>
             )}
@@ -347,13 +350,13 @@ export default function App() {
             <div style={{ background: "#1e293b", padding: "16px", borderRadius: "16px", border: "1px solid #38bdf8" }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: "16px" }}>Watch Video Ad</h3>
-                  <div style={{ fontSize: "12px", color: "#94a3b8" }}>+50 ADC per video</div>
+                  <h3 style={{ margin: 0, fontSize: "16px" }}>Watch Short Video</h3>
+                  <div style={{ fontSize: "12px", color: "#94a3b8" }}>+10 ADC per video</div>
                 </div>
-                <div style={{ fontWeight: "bold", color: "#22c55e" }}>{adsToday}/20</div>
+                <div style={{ fontWeight: "bold", color: "#22c55e" }}>{adsToday}/10</div>
               </div>
-              <button onClick={handleWatchAd} disabled={adsToday >= 20} style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: adsToday >= 20 ? "#475569" : "#16a34a", color: "#fff", fontWeight: "bold", cursor: "pointer" }}>
-                {adsToday >= 20 ? "Daily Limit Reached" : "Watch Ad (+50 ADC)"}
+              <button onClick={handleWatchAd} disabled={adsToday >= 10} style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: adsToday >= 10 ? "#475569" : "#16a34a", color: "#fff", fontWeight: "bold", cursor: "pointer" }}>
+                {adsToday >= 10 ? "Daily Limit Reached (10/10)" : "Watch Ad (+10 ADC)"}
               </button>
             </div>
           </div>
@@ -362,43 +365,73 @@ export default function App() {
         {/* 📋 TASKS */}
         {activeTab === "tasks" && (
           <div>
-            <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>📋 Featured Tasks</h2>
+            <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>📋 Tasks & Partner Deals</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+
+              {/* Task 1 */}
               <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontWeight: "bold", fontSize: "14px" }}>Check Special Offers</div>
-                  <div style={{ color: "#94a3b8", fontSize: "11px" }}>Explore top partner deals (Admitad)</div>
-                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+500 ADC</div>
+                  <div style={{ color: "#94a3b8", fontSize: "11px" }}>Explore Admitad partner offers</div>
+                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+100 ADC</div>
                 </div>
-                <button onClick={() => window.open(ADMITAD_AFFILIATE_LINK, "_blank")} style={{ background: "#0284c7", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>Start</button>
+                <button
+                  disabled={completedTasks.includes("admitad") || taskLoading === "admitad"}
+                  onClick={() => handleCompleteTask("admitad", ADMITAD_AFFILIATE_LINK, 100)}
+                  style={{ background: completedTasks.includes("admitad") ? "#334155" : "#0284c7", color: "#fff", border: "none", padding: "8px 14px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}
+                >
+                  {completedTasks.includes("admitad") ? "Done ✅" : taskLoading === "admitad" ? "Verifying..." : "Start"}
+                </button>
               </div>
 
+              {/* Task 2 */}
               <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontWeight: "bold", fontSize: "14px" }}>Join Major App</div>
-                  <div style={{ color: "#94a3b8", fontSize: "11px" }}>Check out Major Telegram bot</div>
-                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+500 ADC</div>
+                  <div style={{ color: "#94a3b8", fontSize: "11px" }}>Check Major Telegram bot</div>
+                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+100 ADC</div>
                 </div>
-                <button onClick={() => window.open(MAJOR_TELEGRAM_LINK, "_blank")} style={{ background: "#0284c7", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>Start</button>
+                <button
+                  disabled={completedTasks.includes("major") || taskLoading === "major"}
+                  onClick={() => handleCompleteTask("major", MAJOR_TELEGRAM_LINK, 100)}
+                  style={{ background: completedTasks.includes("major") ? "#334155" : "#0284c7", color: "#fff", border: "none", padding: "8px 14px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}
+                >
+                  {completedTasks.includes("major") ? "Done ✅" : taskLoading === "major" ? "Verifying..." : "Start"}
+                </button>
               </div>
 
+              {/* Task 3 */}
               <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontWeight: "bold", fontSize: "14px" }}>Visit AdDev Studio</div>
                   <div style={{ color: "#94a3b8", fontSize: "11px" }}>Discover addev-studio.com</div>
-                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+300 ADC</div>
+                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+50 ADC</div>
                 </div>
-                <button onClick={() => window.open(ADDEV_STUDIO_LINK, "_blank")} style={{ background: "#0284c7", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>Start</button>
+                <button
+                  disabled={completedTasks.includes("studio") || taskLoading === "studio"}
+                  onClick={() => handleCompleteTask("studio", ADDEV_STUDIO_LINK, 50)}
+                  style={{ background: completedTasks.includes("studio") ? "#334155" : "#0284c7", color: "#fff", border: "none", padding: "8px 14px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}
+                >
+                  {completedTasks.includes("studio") ? "Done ✅" : taskLoading === "studio" ? "Verifying..." : "Start"}
+                </button>
               </div>
 
+              {/* Task 4 */}
               <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontWeight: "bold", fontSize: "14px" }}>Explore AdDev Deals</div>
                   <div style={{ color: "#94a3b8", fontSize: "11px" }}>Check latest exclusive discounts</div>
-                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+400 ADC</div>
+                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+50 ADC</div>
                 </div>
-                <button onClick={() => window.open(ADDEV_DEALS_LINK, "_blank")} style={{ background: "#0284c7", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>Start</button>
+                <button
+                  disabled={completedTasks.includes("deals") || taskLoading === "deals"}
+                  onClick={() => handleCompleteTask("deals", ADDEV_DEALS_LINK, 50)}
+                  style={{ background: completedTasks.includes("deals") ? "#334155" : "#0284c7", color: "#fff", border: "none", padding: "8px 14px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}
+                >
+                  {completedTasks.includes("deals") ? "Done ✅" : taskLoading === "deals" ? "Verifying..." : "Start"}
+                </button>
               </div>
+
             </div>
           </div>
         )}
@@ -409,9 +442,9 @@ export default function App() {
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>👥 Invite Friends</h2>
             <div style={{ background: "#1e293b", padding: "20px", borderRadius: "16px", textAlign: "center", border: "1px solid #334155" }}>
               <div style={{ fontSize: "40px", marginBottom: "8px" }}>🎁</div>
-              <h3 style={{ margin: "0 0 8px 0" }}>Earn +1,000 ADC</h3>
+              <h3 style={{ margin: "0 0 8px 0" }}>Earn +200 ADC</h3>
               <p style={{ fontSize: "13px", color: "#94a3b8", marginBottom: "16px" }}>
-                Invite your friends and earn 1,000 ADC for each user who joins using your referral link!
+                Invite your friends and earn 200 ADC for each active user who joins through your link!
               </p>
               <button
                 onClick={() => {
