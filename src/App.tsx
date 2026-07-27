@@ -21,10 +21,9 @@ export default function App() {
   // Wallet State
   const [walletAddress, setWalletAddress] = useState<string>("");
 
-  // ⚙️ LINKS & BOT CONFIGURATION
+  // ⚙️ LINKS & BOT CONFIGURATION (Marrë nga Environment Variables për siguri)
   const BOT_USERNAME = "addev_rewards_bot";
-  
-const BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN || "";
+  const BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN || "";
 
   const MONETAG_LINK = "https://omg10.com/4/10168362";
   const ADMITAD_AFFILIATE_LINK = "https://tatrck.com/h/0Hu30--d0OU9?model=cpa";
@@ -170,6 +169,11 @@ const BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN || "";
     const tg = (window as any).Telegram?.WebApp;
     if (!tg) {
       alert("Telegram WebApp interface not found.");
+      return;
+    }
+
+    if (!BOT_TOKEN) {
+      alert("Bot Token missing! Please set VITE_BOT_TOKEN in Vercel.");
       return;
     }
 
