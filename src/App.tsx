@@ -17,24 +17,19 @@ export default function App() {
   // Wallet State
   const [walletAddress, setWalletAddress] = useState<string>("");
 
-  // =========================================================
-  // ⚙️ KONFIGURIMI I LINKEVE DHE BOT-IT TËND:
-  // =========================================================
-  const BOT_USERNAME = "sddev_rewards_bot"; // Username i bot-it tënd
+  // ⚙️ KONFIGURIMI I LINKEVE
+  const BOT_USERNAME = "sddev_rewards_bot";
   const MONETAG_LINK = "https://omg10.com/4/10168362";
-
-  // Linket e tua personale:
   const ADMITAD_AFFILIATE_LINK = "https://tatrck.com/h/0Hu30--d0OU9?model=cpa";
   const MAJOR_TELEGRAM_LINK = "https://t.me/major/start?startapp=8508477699";
   const ADDEV_STUDIO_LINK = "https://addev-studio.com";
   const ADDEV_DEALS_LINK = "https://addev-studio.com/deals";
-  // =========================================================
 
   useEffect(() => {
     initTelegramUser();
   }, []);
 
-  // Mining Timer Countdown
+  // Countdown timer për Mining
   useEffect(() => {
     let interval: any = null;
     if (miningActive && miningEndTime) {
@@ -67,11 +62,16 @@ export default function App() {
       if (tgUser) {
         setUser(tgUser);
 
-        const { data: existingUser } = await supabase
+        // Kërko përdoruesin në Supabase
+        const { data: existingUser, error } = await supabase
           .from("users")
           .select("*")
           .eq("telegram_id", tgUser.id)
-          .single();
+          .maybeSingle();
+
+        if (error) {
+          alert("Gabim gjatë leximit nga Supabase: " + error.message);
+        }
 
         if (existingUser) {
           setAdcBalance(existingUser.adc_balance || 0);
@@ -90,30 +90,54 @@ export default function App() {
             }
           }
         } else {
+          // Krijo përdoruesin me UPSERT nëse nuk ekziston
           const startParam = tg.initDataUnsafe?.start_param;
           const referrerId = startParam ? parseInt(startParam) : null;
 
-          const { data: newUser } = await supabase
+          const newUserPayload = {
+            telegram_id: tgUser.id,
+            username: tgUser.username || "",
+            first_name: tgUser.first_name || "User",
+            adc_balance: 0,
+            ads_watched_today: 0,
+            mining_level: 1,
+            mining_rate: 20,
+            referred_by: referrerId,
+          };
+
+          const { data: createdUser, error: upsertError } = await supabase
             .from("users")
-            .insert([
-              {
-                telegram_id: tgUser.id,
-                username: tgUser.username || "",
-                first_name: tgUser.first_name || "User",
-                adc_balance: 0,
-                mining_level: 1,
-                mining_rate: 20,
-                referred_by: referrerId,
-              },
-            ])
+            .upsert(newUserPayload, { onConflict: "telegram_id" })
             .select()
             .single();
 
-          if (newUser) {
-            setAdcBalance(newUser.adc_balance || 0);
+          if (upsertError) {
+            alert("Gabim gjatë krijimit të përdoruesit: " + upsertError.message);
+          }
+
+          if (createdUser) {
+            setAdcBalance(createdUser.adc_balance || 0);
           }
         }
       }
+    }
+  };
+
+  // Funksion ndihmës për të ruajtur ndryshimet direkt me Upsert
+  const saveUserData = async (updatedFields: Record<string, any>) => {
+    if (!user) return;
+    const { error } = await supabase.from("users").upsert(
+      {
+        telegram_id: user.id,
+        username: user.username || "",
+        first_name: user.first_name || "User",
+        ...updatedFields,
+      },
+      { onConflict: "telegram_id" }
+    );
+
+    if (error) {
+      alert("Gabim gjatë ruajtjes: " + error.message);
     }
   };
 
@@ -125,12 +149,10 @@ export default function App() {
     setMiningActive(true);
     setMiningEndTime(endTime);
 
-    if (user) {
-      await supabase
-        .from("users")
-        .update({ mining_end_time: endIso })
-        .eq("telegram_id", user.id);
-    }
+    await saveUserData({
+      adc_balance: adcBalance,
+      mining_end_time: endIso,
+    });
   };
 
   // Claim Mining
@@ -143,15 +165,10 @@ export default function App() {
     setMiningEndTime(null);
     setTimeLeftStr("");
 
-    if (user) {
-      await supabase
-        .from("users")
-        .update({
-          adc_balance: newBalance,
-          mining_end_time: null,
-        })
-        .eq("telegram_id", user.id);
-    }
+    await saveUserData({
+      adc_balance: newBalance,
+      mining_end_time: null,
+    });
 
     alert(`🎉 Successfully claimed +${reward} ADC!`);
   };
@@ -164,12 +181,10 @@ export default function App() {
     } else {
       setMiningLevel(2);
       setMiningRate(40);
-      if (user) {
-        await supabase
-          .from("users")
-          .update({ mining_level: 2, mining_rate: 40 })
-          .eq("telegram_id", user.id);
-      }
+      await saveUserData({
+        mining_level: 2,
+        mining_rate: 40,
+      });
       alert("🚀 Mining upgraded to Level 2 (40 ADC / hr)!");
     }
   };
@@ -190,15 +205,10 @@ export default function App() {
       setAdcBalance(newBalance);
       setAdsToday(newAds);
 
-      if (user) {
-        await supabase
-          .from("users")
-          .update({
-            adc_balance: newBalance,
-            ads_watched_today: newAds,
-          })
-          .eq("telegram_id", user.id);
-      }
+      await saveUserData({
+        adc_balance: newBalance,
+        ads_watched_today: newAds,
+      });
 
       alert("🎉 Earned +50 ADC!");
     }, 2000);
@@ -230,16 +240,11 @@ export default function App() {
 
     if (!error) {
       setAdcBalance(newBalance);
-      if (user) {
-        await supabase
-          .from("users")
-          .update({ adc_balance: newBalance })
-          .eq("telegram_id", user.id);
-      }
+      await saveUserData({ adc_balance: newBalance });
       alert("✅ Withdrawal request submitted successfully!");
       setWalletAddress("");
     } else {
-      alert("Error submitting withdrawal. Please try again.");
+      alert("Error submitting withdrawal: " + error.message);
     }
   };
 
@@ -285,7 +290,6 @@ export default function App() {
                 {miningRate} ADC / hour
               </div>
 
-              {/* Status Box */}
               <div style={{ background: "#0f172a", padding: "14px", borderRadius: "12px", margin: "16px 0", border: "1px solid #1e293b" }}>
                 {miningActive ? (
                   <>
@@ -303,10 +307,7 @@ export default function App() {
               </div>
 
               {!miningActive && !miningEndTime && (
-                <button
-                  onClick={handleStartMining}
-                  style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: "linear-gradient(90deg, #0284c7, #38bdf8)", color: "#fff", fontWeight: "bold", cursor: "pointer" }}
-                >
+                <button onClick={handleStartMining} style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: "linear-gradient(90deg, #0284c7, #38bdf8)", color: "#fff", fontWeight: "bold", cursor: "pointer" }}>
                   ▶ Start Mining (24 Hours Free)
                 </button>
               )}
@@ -318,10 +319,7 @@ export default function App() {
               )}
 
               {!miningActive && miningEndTime && (
-                <button
-                  onClick={handleClaimMining}
-                  style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: "linear-gradient(90deg, #16a34a, #22c55e)", color: "#fff", fontWeight: "bold", cursor: "pointer" }}
-                >
+                <button onClick={handleClaimMining} style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: "linear-gradient(90deg, #16a34a, #22c55e)", color: "#fff", fontWeight: "bold", cursor: "pointer" }}>
                   🎉 Claim {miningRate * 24} ADC
                 </button>
               )}
@@ -331,18 +329,10 @@ export default function App() {
               <div style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)", padding: "16px", borderRadius: "16px", border: "1px solid #eab308" }}>
                 <h3 style={{ margin: "0 0 8px 0", fontSize: "16px", color: "#eab308" }}>⚡ Boost Speed to 40 ADC/hr</h3>
                 <p style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "12px" }}>Double your daily ADC production:</p>
-
-                <button
-                  onClick={handleUpgradeWithStars}
-                  style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: "linear-gradient(90deg, #eab308, #ca8a04)", color: "#000", fontWeight: "bold", marginBottom: "10px", cursor: "pointer" }}
-                >
+                <button onClick={handleUpgradeWithStars} style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: "linear-gradient(90deg, #eab308, #ca8a04)", color: "#000", fontWeight: "bold", marginBottom: "10px", cursor: "pointer" }}>
                   ⭐ Upgrade with 50 Telegram Stars
                 </button>
-
-                <button
-                  onClick={() => setActiveTab("tasks")}
-                  style={{ width: "100%", padding: "10px", borderRadius: "10px", border: "1px solid #38bdf8", background: "transparent", color: "#38bdf8", fontWeight: "bold", cursor: "pointer" }}
-                >
+                <button onClick={() => setActiveTab("tasks")} style={{ width: "100%", padding: "10px", borderRadius: "10px", border: "1px solid #38bdf8", background: "transparent", color: "#38bdf8", fontWeight: "bold", cursor: "pointer" }}>
                   📋 Complete Tasks to Upgrade (Free)
                 </button>
               </div>
@@ -373,9 +363,7 @@ export default function App() {
         {activeTab === "tasks" && (
           <div>
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>📋 Featured Tasks</h2>
-            
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {/* Task 1: Admitad Affiliate */}
               <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontWeight: "bold", fontSize: "14px" }}>Check Special Offers</div>
@@ -385,7 +373,6 @@ export default function App() {
                 <button onClick={() => window.open(ADMITAD_AFFILIATE_LINK, "_blank")} style={{ background: "#0284c7", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>Start</button>
               </div>
 
-              {/* Task 2: Major App */}
               <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontWeight: "bold", fontSize: "14px" }}>Join Major App</div>
@@ -395,7 +382,6 @@ export default function App() {
                 <button onClick={() => window.open(MAJOR_TELEGRAM_LINK, "_blank")} style={{ background: "#0284c7", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>Start</button>
               </div>
 
-              {/* Task 3: AdDev Studio */}
               <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontWeight: "bold", fontSize: "14px" }}>Visit AdDev Studio</div>
@@ -405,7 +391,6 @@ export default function App() {
                 <button onClick={() => window.open(ADDEV_STUDIO_LINK, "_blank")} style={{ background: "#0284c7", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>Start</button>
               </div>
 
-              {/* Task 4: AdDev Deals */}
               <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontWeight: "bold", fontSize: "14px" }}>Explore AdDev Deals</div>
@@ -493,7 +478,7 @@ export default function App() {
         )}
       </div>
 
-      {/* Navigation */}
+      {/* Bottom Navigation */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#0f172a", borderTop: "1px solid #334155", display: "flex", justifyContent: "space-around", padding: "8px 0", zIndex: 100 }}>
         <button onClick={() => setActiveTab("home")} style={{ background: "none", border: "none", color: activeTab === "home" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>🏠<br/>Home</button>
         <button onClick={() => setActiveTab("mining")} style={{ background: "none", border: "none", color: activeTab === "mining" ? "#eab308" : "#64748b", fontSize: "11px", cursor: "pointer" }}>⛏️<br/>Mining</button>
