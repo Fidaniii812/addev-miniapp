@@ -22,7 +22,8 @@ export default function App() {
   const [walletAddress, setWalletAddress] = useState<string>("");
 
   // ⚙️ LINKS & BOT CONFIGURATION
-  const BOT_USERNAME = "sddev_rewards_bot";
+  const BOT_USERNAME = "addev_rewards_bot";
+
   // ⚠️ REPLACE THIS WITH YOUR ACTUAL TELEGRAM BOT TOKEN FROM BOTFATHER
   const BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"; 
 
