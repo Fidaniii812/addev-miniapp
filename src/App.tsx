@@ -7,7 +7,7 @@ export default function App() {
   const [adcBalance, setAdcBalance] = useState<number>(0);
   const [adsToday, setAdsToday] = useState<number>(0);
 
-  // Mining States (Niveli i ulur: 5 ADC/orë)
+  // Mining States (Base level: 5 ADC/hr)
   const [miningLevel, setMiningLevel] = useState<number>(1);
   const [miningRate, setMiningRate] = useState<number>(5);
   const [miningActive, setMiningActive] = useState<boolean>(false);
@@ -21,22 +21,22 @@ export default function App() {
   // Wallet State
   const [walletAddress, setWalletAddress] = useState<string>("");
 
-  // ⚙️ KONFIGURIMI I LINKEVE & API
+  // ⚙️ LINKS & BOT CONFIGURATION
   const BOT_USERNAME = "sddev_rewards_bot";
+  // ⚠️ REPLACE THIS WITH YOUR ACTUAL TELEGRAM BOT TOKEN FROM BOTFATHER
+  const BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"; 
+
   const MONETAG_LINK = "https://omg10.com/4/10168362";
   const ADMITAD_AFFILIATE_LINK = "https://tatrck.com/h/0Hu30--d0OU9?model=cpa";
   const MAJOR_TELEGRAM_LINK = "https://t.me/major/start?startapp=8508477699";
   const ADDEV_STUDIO_LINK = "https://addev-studio.com";
   const ADDEV_DEALS_LINK = "https://addev-studio.com/deals";
-  
-  // Endpoint i Backend-it/Bot-it ku gjenerohet fatura e Telegram Stars
-  const STARS_API_URL = "https://addev-studio.com/api/create-stars-invoice";
 
   useEffect(() => {
     initTelegramUser();
   }, []);
 
-  // Countdown timer për Mining
+  // Countdown timer for Mining
   useEffect(() => {
     let interval: any = null;
     if (miningActive && miningEndTime) {
@@ -165,32 +165,36 @@ export default function App() {
     alert(`🎉 Successfully claimed +${reward} ADC!`);
   };
 
-  // ⭐️ Upgrade Mining me Telegram Stars Reale
+  // ⭐️ Upgrade Mining Direct with Telegram Stars
   const handleUpgradeWithStars = async () => {
     const tg = (window as any).Telegram?.WebApp;
     if (!tg) {
-      alert("Telegram WebApp not found.");
+      alert("Telegram WebApp interface not found.");
+      return;
+    }
+
+    if (!BOT_TOKEN || BOT_TOKEN === "YOUR_BOT_TOKEN_HERE") {
+      alert("Please configure your BOT_TOKEN inside App.tsx first.");
       return;
     }
 
     try {
-      // Kërkojmë linkun e faturës nga Backend-i i botit
-      const response = await fetch(STARS_API_URL, {
+      const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/createInvoiceLink`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          telegram_id: user?.id,
           title: "Mining Speed Boost (Level 2)",
-          description: "Rrit shpejtësinë nga 5 ADC/h në 10 ADC/h përgjithmonë",
-          amount: 50, // 50 Telegram Stars
+          description: "Increase mining speed to 10 ADC/hr permanently",
+          payload: "mining_boost_level2",
+          currency: "XTR", // Telegram Stars currency
+          prices: [{ label: "Level 2 Boost", amount: 50 }], // 50 Stars
         }),
       });
 
       const data = await response.json();
 
-      if (data.invoiceUrl && tg.openInvoice) {
-        // Hapet dritarja e pagesës zyrtare të Telegram Stars
-        tg.openInvoice(data.invoiceUrl, async (status: string) => {
+      if (data.ok && data.result) {
+        tg.openInvoice(data.result, async (status: string) => {
           if (status === "paid") {
             const newLevel = 2;
             const newRate = 10;
@@ -203,7 +207,6 @@ export default function App() {
               mining_rate: newRate,
             });
 
-            // Ruajmë transaksionin te Supabase
             await supabase.from("stars_payments").insert([
               {
                 telegram_id: user?.id,
@@ -213,23 +216,23 @@ export default function App() {
               },
             ]);
 
-            alert("🎉 Urime! U anëtarësove në Mining Level 2 me sukses përmes Telegram Stars!");
+            alert("🎉 Congratulations! Successfully upgraded to Mining Level 2 via Telegram Stars!");
           } else if (status === "cancelled") {
-            alert("Pagesa me Stars u anulua.");
+            alert("Payment was cancelled.");
           } else {
-            alert("Statusi i pagesës: " + status);
+            alert("Payment status: " + status);
           }
         });
       } else {
-        alert("E pamundur të gjenerohet fatura e stars. Sigurohu që serveri API është aktiv.");
+        alert("Invoice creation failed: " + (data.description || "Invalid Bot Token or settings."));
       }
     } catch (err) {
       console.error(err);
-      alert("Gabim gjatë lidhjes me serverin e pagesave.");
+      alert("Network error while connecting to Telegram API.");
     }
   };
 
-  // Watch Ad (Maksimumi 10 reklama në ditë / +10 ADC secila)
+  // Watch Ad (Limit 10 ads/day)
   const handleWatchAd = async () => {
     if (adsToday >= 10) {
       alert("Daily limit reached (10 Ads/day)!");
@@ -254,7 +257,7 @@ export default function App() {
     }, 3000);
   };
 
-  // Kryerja e Detyrave me Timer prej 10 sekondash
+  // Complete Tasks with 10s Timer Verification
   const handleCompleteTask = (taskId: string, link: string, reward: number) => {
     if (completedTasks.includes(taskId)) {
       alert("You have already completed this task!");
@@ -275,7 +278,7 @@ export default function App() {
     }, 10000);
   };
 
-  // Withdraw
+  // Withdraw Request
   const handleWithdrawRequest = async () => {
     if (!walletAddress || walletAddress.trim().length < 10) {
       alert("Please enter a valid wallet address!");
@@ -302,7 +305,7 @@ export default function App() {
     if (!error) {
       setAdcBalance(newBalance);
       await saveUserData({ adc_balance: newBalance });
-      alert("✅ Withdrawal request submitted! Processing time: 24-48h.");
+      alert("✅ Withdrawal request submitted! Processing time: 24-48 hours.");
       setWalletAddress("");
     } else {
       alert("Error submitting request: " + error.message);
@@ -327,7 +330,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main Container */}
+      {/* Main Content Area */}
       <div style={{ padding: "16px" }}>
         {/* 🏠 HOME */}
         {activeTab === "home" && (
@@ -369,7 +372,7 @@ export default function App() {
 
               {!miningActive && !miningEndTime && (
                 <button onClick={handleStartMining} style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: "linear-gradient(90deg, #0284c7, #38bdf8)", color: "#fff", fontWeight: "bold", cursor: "pointer" }}>
-                  ▶ Start Mining (120 ADC / 24h)
+                  ▶ Start Mining ({miningRate * 24} ADC / 24h)
                 </button>
               )}
 
