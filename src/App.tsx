@@ -21,13 +21,16 @@ export default function App() {
   // Wallet State
   const [walletAddress, setWalletAddress] = useState<string>("");
 
-  // ⚙️ KONFIGURIMI I LINKEVE
+  // ⚙️ KONFIGURIMI I LINKEVE & API
   const BOT_USERNAME = "sddev_rewards_bot";
   const MONETAG_LINK = "https://omg10.com/4/10168362";
   const ADMITAD_AFFILIATE_LINK = "https://tatrck.com/h/0Hu30--d0OU9?model=cpa";
   const MAJOR_TELEGRAM_LINK = "https://t.me/major/start?startapp=8508477699";
   const ADDEV_STUDIO_LINK = "https://addev-studio.com";
   const ADDEV_DEALS_LINK = "https://addev-studio.com/deals";
+  
+  // Endpoint i Backend-it/Bot-it ku gjenerohet fatura e Telegram Stars
+  const STARS_API_URL = "https://addev-studio.com/api/create-stars-invoice";
 
   useEffect(() => {
     initTelegramUser();
@@ -162,15 +165,67 @@ export default function App() {
     alert(`🎉 Successfully claimed +${reward} ADC!`);
   };
 
-  // Upgrade Mining
+  // ⭐️ Upgrade Mining me Telegram Stars Reale
   const handleUpgradeWithStars = async () => {
     const tg = (window as any).Telegram?.WebApp;
-    if (tg && tg.openInvoice) {
-      // Kur të vendosësh faturën reale nga BotFather:
-      // tg.openInvoice("INVOICE_URL_KOT", (status) => { ... })
-      alert("⭐ Telegram Stars invoice will be opened here upon BotFather configuration.");
-    } else {
-      alert("⭐ Payment window initialized.");
+    if (!tg) {
+      alert("Telegram WebApp not found.");
+      return;
+    }
+
+    try {
+      // Kërkojmë linkun e faturës nga Backend-i i botit
+      const response = await fetch(STARS_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          telegram_id: user?.id,
+          title: "Mining Speed Boost (Level 2)",
+          description: "Rrit shpejtësinë nga 5 ADC/h në 10 ADC/h përgjithmonë",
+          amount: 50, // 50 Telegram Stars
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.invoiceUrl && tg.openInvoice) {
+        // Hapet dritarja e pagesës zyrtare të Telegram Stars
+        tg.openInvoice(data.invoiceUrl, async (status: string) => {
+          if (status === "paid") {
+            const newLevel = 2;
+            const newRate = 10;
+
+            setMiningLevel(newLevel);
+            setMiningRate(newRate);
+
+            await saveUserData({
+              mining_level: newLevel,
+              mining_rate: newRate,
+            });
+
+            // Ruajmë transaksionin te Supabase
+            await supabase.from("stars_payments").insert([
+              {
+                telegram_id: user?.id,
+                amount_stars: 50,
+                package_type: "mining_boost_level2",
+                status: "completed",
+              },
+            ]);
+
+            alert("🎉 Urime! U anëtarësove në Mining Level 2 me sukses përmes Telegram Stars!");
+          } else if (status === "cancelled") {
+            alert("Pagesa me Stars u anulua.");
+          } else {
+            alert("Statusi i pagesës: " + status);
+          }
+        });
+      } else {
+        alert("E pamundur të gjenerohet fatura e stars. Sigurohu që serveri API është aktiv.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Gabim gjatë lidhjes me serverin e pagesave.");
     }
   };
 
@@ -217,7 +272,7 @@ export default function App() {
 
       await saveUserData({ adc_balance: newBalance });
       alert(`✅ Task verified! Earned +${reward} ADC!`);
-    }, 10000); // 10 sekonda vonesë për verifikim
+    }, 10000);
   };
 
   // Withdraw
@@ -334,7 +389,7 @@ export default function App() {
             {miningLevel < 2 && (
               <div style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)", padding: "16px", borderRadius: "16px", border: "1px solid #eab308" }}>
                 <h3 style={{ margin: "0 0 8px 0", fontSize: "16px", color: "#eab308" }}>⚡ Boost Speed to 10 ADC/hr</h3>
-                <p style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "12px" }}>Double your daily production (240 ADC/day):</p>
+                <p style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "12px" }}>Double your daily production using Telegram Stars:</p>
                 <button onClick={handleUpgradeWithStars} style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: "linear-gradient(90deg, #eab308, #ca8a04)", color: "#000", fontWeight: "bold", cursor: "pointer" }}>
                   ⭐ Upgrade with 50 Telegram Stars
                 </button>
@@ -368,7 +423,6 @@ export default function App() {
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>📋 Tasks & Partner Deals</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
 
-              {/* Task 1 */}
               <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontWeight: "bold", fontSize: "14px" }}>Check Special Offers</div>
@@ -384,7 +438,6 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Task 2 */}
               <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontWeight: "bold", fontSize: "14px" }}>Join Major App</div>
@@ -400,7 +453,6 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Task 3 */}
               <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontWeight: "bold", fontSize: "14px" }}>Visit AdDev Studio</div>
@@ -416,7 +468,6 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Task 4 */}
               <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontWeight: "bold", fontSize: "14px" }}>Explore AdDev Deals</div>
