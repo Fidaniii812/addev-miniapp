@@ -16,26 +16,33 @@ export default function App() {
   const [currentMined, setCurrentMined] = useState<number>(0);
   const [timeLeftStr, setTimeLeftStr] = useState<string>("");
 
-  // Wheel of Fortune States
+  // Wheel of Fortune States (Real Spinning Animation Visuals)
   const [wheelSpinsToday, setWheelSpinsToday] = useState<number>(0);
   const [spinning, setSpinning] = useState<boolean>(false);
   const [wheelResult, setWheelResult] = useState<string | null>(null);
+  const [wheelRotation, setWheelRotation] = useState<number>(0);
+
+  // Multi-Ad Watching States (3 Ads in a row, 5s each)
+  const [adBatchActive, setAdBatchActive] = useState<boolean>(false);
+  const [currentAdIndex, setCurrentAdIndex] = useState<number>(1);
+  const [totalAdsInBatch] = useState<number>(3);
+  const [adTimer, setAdTimer] = useState<number>(5);
 
   // Tasks verification states
   const [completedTasks, setCompletedTasks] = useState<string[]>([]);
   const [taskLoading, setTaskLoading] = useState<string | null>(null);
+
+  // Invite & Friends States
+  const [invitedFriends, setInvitedFriends] = useState<any[]>([]);
 
   // Wallet State
   const [walletAddress, setWalletAddress] = useState<string>("");
 
   // ⚙️ LINKS & BOT CONFIGURATION
   const BOT_USERNAME = "addev_rewards_bot";
-  const BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN || "";
-
   const MONETAG_LINK = "https://omg10.com/4/10168362";
   const MAJOR_TELEGRAM_LINK = "https://t.me/major/start?startapp=8508477699";
   const ADDEV_STUDIO_LINK = "https://addev-studio.com";
-  const ADDEV_MINIAPP_LINK = "https://addev-miniapp.vercel.app/";
 
   useEffect(() => {
     initTelegramUser();
@@ -69,6 +76,27 @@ export default function App() {
     }
     return () => clearInterval(interval);
   }, [miningActive, miningEndTime, miningStartTime, miningRate]);
+
+  // Sequential Ads Timer Logic
+  useEffect(() => {
+    let adInterval: any = null;
+    if (adBatchActive && adTimer > 0) {
+      adInterval = setInterval(() => {
+        setAdTimer((prev) => prev - 1);
+      }, 1000);
+    } else if (adBatchActive && adTimer === 0) {
+      if (currentAdIndex < totalAdsInBatch) {
+        alert(`✅ Ad ${currentAdIndex} completed! Opening next ad...`);
+        setCurrentAdIndex((prev) => prev + 1);
+        setAdTimer(5);
+        window.open(MONETAG_LINK, "_blank");
+      } else {
+        setAdBatchActive(false);
+        finishWatchingAdBatch();
+      }
+    }
+    return () => clearInterval(adInterval);
+  }, [adBatchActive, adTimer, currentAdIndex]);
 
   const initTelegramUser = async () => {
     const tg = (window as any).Telegram?.WebApp;
@@ -143,6 +171,16 @@ export default function App() {
             setAdcBalance(createdUser.adc_balance || 0);
           }
         }
+
+        // Fetch referred friends
+        const { data: friends } = await supabase
+          .from("users")
+          .select("first_name, username, adc_balance")
+          .eq("referred_by", tgUser.id);
+        
+        if (friends) {
+          setInvitedFriends(friends);
+        }
       }
     }
   };
@@ -198,7 +236,8 @@ export default function App() {
     alert(`🎉 Successfully claimed +${reward} ADC!`);
   };
 
-  const handleSpinWheel = async () => {
+  // True Spinning Wheel Animation Logic
+  const handleSpinWheel = () => {
     if (wheelSpinsToday >= 3) {
       alert("You have used all 3 free spins for today! Come back tomorrow.");
       return;
@@ -207,9 +246,12 @@ export default function App() {
     setSpinning(true);
     setWheelResult(null);
 
-    // Prizes pool: 10, 50, 100, 250, 500, 0 (Try again)
     const prizes = [10, 25, 50, 100, 200, 500];
-    const randomPrize = prizes[Math.floor(Math.random() * prizes.length)];
+    const randomIndex = Math.floor(Math.random() * prizes.length);
+    const randomPrize = prizes[randomIndex];
+
+    const extraDegrees = 360 * 5 + randomIndex * (360 / prizes.length);
+    setWheelRotation((prev) => prev + extraDegrees);
 
     setTimeout(async () => {
       setSpinning(false);
@@ -218,40 +260,59 @@ export default function App() {
 
       setAdcBalance(newBalance);
       setWheelSpinsToday(newSpins);
-      setWheelResult(`🎉 You won +${randomPrize} ADC!`);
+      setWheelResult(`🎉 Hurrah! You won +${randomPrize} ADC!`);
 
       await saveUserData({
         adc_balance: newBalance,
         wheel_spins_today: newSpins,
       });
-    }, 2000);
-  };
-
-  const handleWatchAd = async () => {
-    if (adsToday >= 10) {
-      alert("Daily limit reached (10 Ads/day)!");
-      return;
-    }
-
-    window.open(MONETAG_LINK, "_blank");
-
-    setTimeout(async () => {
-      const newBalance = adcBalance + 10;
-      const newAds = adsToday + 1;
-
-      setAdcBalance(newBalance);
-      setAdsToday(newAds);
-
-      await saveUserData({
-        adc_balance: newBalance,
-        ads_watched_today: newAds,
-      });
-
-      alert("🎉 Earned +10 ADC!");
     }, 3000);
   };
 
-  const handleCompleteTask = (taskId: string, link: string, reward: number) => {
+  const startWatchingAdBatch = () => {
+    if (adsToday >= 10) {
+      alert("Daily limit reached (10 batches/day)!");
+      return;
+    }
+
+    setCurrentAdIndex(1);
+    setAdTimer(5);
+    setAdBatchActive(true);
+    window.open(MONETAG_LINK, "_blank");
+  };
+
+  const finishWatchingAdBatch = async () => {
+    const rewardEarned = 30;
+    const newBalance = adcBalance + rewardEarned;
+    const newAds = adsToday + 1;
+
+    setAdcBalance(newBalance);
+    setAdsToday(newAds);
+
+    await saveUserData({
+      adc_balance: newBalance,
+      ads_watched_today: newAds,
+    });
+
+    alert("🎉 All 3 ads completed successfully! Earned +30 ADC!");
+  };
+
+  // Direct Share Function (without manual copying)
+  const handleDirectShare = (title: string, text: string, url: string) => {
+    if (navigator.share) {
+      navigator.share({
+        title: title,
+        text: text,
+        url: url,
+      }).catch((error) => console.log("Sharing failed", error));
+    } else {
+      // Fallback for desktop/unsupported browsers using Telegram sharing intent
+      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+      window.open(shareUrl, "_blank");
+    }
+  };
+
+  const handleJoinBotTask = (taskId: string, link: string, reward: number) => {
     if (completedTasks.includes(taskId)) {
       alert("You have already completed this task!");
       return;
@@ -272,8 +333,8 @@ export default function App() {
         adc_balance: newBalance,
         completed_tasks: updatedTasks 
       });
-      alert(`✅ Task verified! Earned +${reward} ADC!`);
-    }, 10000);
+      alert(`✅ Task verified successfully! Earned +${reward} ADC!`);
+    }, 8000);
   };
 
   const handleWithdrawRequest = async () => {
@@ -330,7 +391,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <div style={{ padding: "16px" }}>
-        {/* 🏠 HOME - Redesigned & Interactive */}
+        {/* 🏠 HOME */}
         {activeTab === "home" && (
           <div>
             <div style={{ background: "linear-gradient(135deg, #0284c7, #0369a1)", padding: "20px", borderRadius: "16px", textAlign: "center", marginBottom: "16px", boxShadow: "0 10px 15px -3px rgba(2, 132, 199, 0.3)" }}>
@@ -339,7 +400,6 @@ export default function App() {
               <div style={{ fontSize: "12px", color: "#bae6fd" }}>({adcBalance.toLocaleString()} ADC)</div>
             </div>
 
-            {/* Quick Actions Grid */}
             <h3 style={{ fontSize: "15px", marginBottom: "10px", color: "#94a3b8" }}>⚡ Quick Actions</h3>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "16px" }}>
               <button 
@@ -361,38 +421,53 @@ export default function App() {
               </button>
             </div>
 
-            {/* Banner to Watch Ads directly from Home */}
             <div style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)", padding: "16px", borderRadius: "16px", border: "1px solid #38bdf8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
-                <div style={{ fontWeight: "bold", fontSize: "14px" }}>📺 Watch Ad & Earn</div>
-                <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>Earn +10 ADC instantly ({adsToday}/10)</div>
+                <div style={{ fontWeight: "bold", fontSize: "14px" }}>📺 Watch 3 Ads & Earn</div>
+                <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>3 ads (5s each) • +30 ADC</div>
               </div>
               <button 
-                onClick={handleWatchAd} 
-                disabled={adsToday >= 10}
-                style={{ background: adsToday >= 10 ? "#475569" : "#16a34a", color: "#fff", border: "none", padding: "10px 14px", borderRadius: "10px", fontWeight: "bold", cursor: "pointer", fontSize: "12px" }}
+                onClick={() => setActiveTab("ads")} 
+                style={{ background: "#16a34a", color: "#fff", border: "none", padding: "10px 14px", borderRadius: "10px", fontWeight: "bold", cursor: "pointer", fontSize: "12px" }}
               >
-                {adsToday >= 10 ? "Done" : "Watch (+10)"}
+                Earn (+30)
               </button>
             </div>
           </div>
         )}
 
-        {/* 🎡 LUCKY WHEEL (New Feature) */}
+        {/* 🎡 LUCKY WHEEL */}
         {activeTab === "wheel" && (
           <div>
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>🎡 Lucky Wheel of Fortune</h2>
-            <div style={{ background: "#1e293b", padding: "24px", borderRadius: "16px", border: "1px solid #eab308", textAlign: "center", marginBottom: "16px" }}>
-              <div style={{ fontSize: "60px", marginBottom: "10px" }}>
-                {spinning ? "🌀" : "🎯"}
+            <div style={{ background: "#1e293b", padding: "20px", borderRadius: "16px", border: "1px solid #eab308", textAlign: "center", marginBottom: "16px" }}>
+              
+              <div style={{ position: "relative", width: "180px", height: "180px", margin: "0 auto 16px auto" }}>
+                <div style={{
+                  width: "100%",
+                  height: "100%",
+                  borderRadius: "50%",
+                  background: "conic-gradient(#eab308 0deg 60deg, #38bdf8 60deg 120deg, #22c55e 120deg 180deg, #a855f7 180deg 240deg, #ec4899 240deg 300deg, #f97316 300deg 360deg)",
+                  border: "4px solid #fff",
+                  boxShadow: "0 0 15px rgba(234, 179, 8, 0.5)",
+                  transform: `rotate(${wheelRotation}deg)`,
+                  transition: spinning ? "transform 3s cubic-bezier(0.15, 0.9, 0.2, 1)" : "none",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}>
+                  <div style={{ width: "40px", height: "40px", background: "#0f172a", borderRadius: "50%", border: "2px solid #fff" }}></div>
+                </div>
+                <div style={{ position: "absolute", top: "-10px", left: "calc(50% - 10px)", width: "0", height: "0", borderLeft: "10px solid transparent", borderRight: "10px solid transparent", borderBottom: "18px solid #ef4444" }}></div>
               </div>
-              <h3 style={{ margin: "0 0 8px 0", fontSize: "18px", color: "#eab308" }}>Spin & Win Big Rewards!</h3>
-              <p style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "16px" }}>
-                Test your luck! You have <strong style={{ color: "#fff" }}>{3 - wheelSpinsToday}</strong> free spins remaining today.
+
+              <h3 style={{ margin: "0 0 6px 0", fontSize: "16px", color: "#eab308" }}>Spin the Wheel & Win!</h3>
+              <p style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "14px" }}>
+                Free spins remaining today: <strong style={{ color: "#fff" }}>{3 - wheelSpinsToday} / 3</strong>
               </p>
 
               {wheelResult && (
-                <div style={{ background: "#0f172a", padding: "12px", borderRadius: "10px", marginBottom: "16px", color: "#22c55e", fontWeight: "bold", fontSize: "15px", border: "1px solid #22c55e" }}>
+                <div style={{ background: "#0f172a", padding: "10px", borderRadius: "10px", marginBottom: "14px", color: "#22c55e", fontWeight: "bold", fontSize: "14px", border: "1px solid #22c55e" }}>
                   {wheelResult}
                 </div>
               )}
@@ -402,17 +477,17 @@ export default function App() {
                 disabled={spinning || wheelSpinsToday >= 3}
                 style={{ 
                   width: "100%", 
-                  padding: "14px", 
+                  padding: "12px", 
                   borderRadius: "12px", 
                   border: "none", 
                   background: wheelSpinsToday >= 3 ? "#334155" : "linear-gradient(90deg, #eab308, #ca8a04)", 
                   color: wheelSpinsToday >= 3 ? "#94a3b8" : "#000", 
                   fontWeight: "bold", 
                   cursor: wheelSpinsToday >= 3 ? "not-allowed" : "pointer",
-                  fontSize: "15px"
+                  fontSize: "14px"
                 }}
               >
-                {spinning ? "Spinning..." : wheelSpinsToday >= 3 ? "No Spins Left Today" : "🎲 Spin the Wheel!"}
+                {spinning ? "Wheel is spinning..." : wheelSpinsToday >= 3 ? "No Spins Left Today" : "🎲 Spin Now!"}
               </button>
             </div>
           </div>
@@ -428,7 +503,6 @@ export default function App() {
                 {miningRate} ADC / hour
               </div>
 
-              {/* Live Mined Counter Display */}
               <div style={{ margin: "16px 0" }}>
                 <div style={{ fontSize: "12px", color: "#94a3b8" }}>Mined So Far:</div>
                 <div style={{ fontSize: "36px", fontWeight: "bold", color: "#22c55e", margin: "4px 0" }}>
@@ -476,81 +550,140 @@ export default function App() {
         {/* 📺 ADS */}
         {activeTab === "ads" && (
           <div>
-            <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>📺 Watch & Earn</h2>
-            <div style={{ background: "#1e293b", padding: "16px", borderRadius: "16px", border: "1px solid #38bdf8" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: "16px" }}>Watch Short Video</h3>
-                  <div style={{ fontSize: "12px", color: "#94a3b8" }}>+10 ADC per video</div>
-                </div>
-                <div style={{ fontWeight: "bold", color: "#22c55e" }}>{adsToday}/10</div>
+            <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>📺 Watch 3 Ads Sequence</h2>
+            <div style={{ background: "#1e293b", padding: "20px", borderRadius: "16px", border: "1px solid #38bdf8", textAlign: "center" }}>
+              <div style={{ fontSize: "40px", marginBottom: "8px" }}>🎬</div>
+              <h3 style={{ margin: "0 0 6px 0", fontSize: "16px" }}>Monetag Ad Series</h3>
+              <div style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "16px" }}>
+                Watch 3 ads in a row (5s each) to earn <strong style={{ color: "#22c55e" }}>+30 ADC</strong>. Progress: <strong style={{ color: "#38bdf8" }}>{adsToday}/10 batches</strong>
               </div>
-              <button onClick={handleWatchAd} disabled={adsToday >= 10} style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: adsToday >= 10 ? "#475569" : "#16a34a", color: "#fff", fontWeight: "bold", cursor: "pointer" }}>
-                {adsToday >= 10 ? "Daily Limit Reached (10/10)" : "Watch Ad (+10 ADC)"}
-              </button>
+
+              {adBatchActive ? (
+                <div style={{ background: "#0f172a", padding: "16px", borderRadius: "12px", border: "1px solid #eab308", marginBottom: "16px" }}>
+                  <div style={{ fontSize: "13px", color: "#eab308", fontWeight: "bold" }}>
+                    ⏳ Watching Ad {currentAdIndex} of {totalAdsInBatch}
+                  </div>
+                  <div style={{ fontSize: "32px", fontWeight: "bold", color: "#fff", margin: "6px 0" }}>{adTimer}s</div>
+                  <div style={{ fontSize: "11px", color: "#94a3b8" }}>Please keep the window open. Next ad will load automatically!</div>
+                </div>
+              ) : (
+                <button 
+                  onClick={startWatchingAdBatch} 
+                  disabled={adsToday >= 10}
+                  style={{ 
+                    width: "100%", 
+                    padding: "14px", 
+                    borderRadius: "12px", 
+                    border: "none", 
+                    background: adsToday >= 10 ? "#475569" : "linear-gradient(90deg, #16a34a, #22c55e)", 
+                    color: "#fff", 
+                    fontWeight: "bold", 
+                    cursor: adsToday >= 10 ? "not-allowed" : "pointer",
+                    fontSize: "15px"
+                  }}
+                >
+                  {adsToday >= 10 ? "Daily Limit Reached (10/10)" : "▶ Start 3-Ad Series (+30 ADC)"}
+                </button>
+              )}
             </div>
           </div>
         )}
 
-        {/* 📋 TASKS */}
+        {/* 📋 TASKS (With Direct Share & Join Bot Buttons side-by-side) */}
         {activeTab === "tasks" && (
           <div>
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>📋 Tasks & Partner Deals</h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
 
-              <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontWeight: "bold", fontSize: "14px" }}>Join Major App</div>
-                  <div style={{ color: "#94a3b8", fontSize: "11px" }}>Check Major Telegram bot</div>
-                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+100 ADC</div>
+              {/* Task 1: Major Bot */}
+              <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", border: "1px solid #334155" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                  <div>
+                    <div style={{ fontWeight: "bold", fontSize: "14px" }}>Join Major App</div>
+                    <div style={{ color: "#94a3b8", fontSize: "11px" }}>Interact with Major Bot</div>
+                    <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+100 ADC</div>
+                  </div>
                 </div>
-                <button
-                  disabled={completedTasks.includes("major") || taskLoading === "major"}
-                  onClick={() => handleCompleteTask("major", MAJOR_TELEGRAM_LINK, 100)}
-                  style={{ background: completedTasks.includes("major") ? "#334155" : "#0284c7", color: "#fff", border: "none", padding: "8px 14px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}
-                >
-                  {completedTasks.includes("major") ? "Done ✅" : taskLoading === "major" ? "Verifying..." : "Start"}
-                </button>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                  <button
+                    onClick={() => handleDirectShare("Join Major App", "Check out Major App and earn rewards!", MAJOR_TELEGRAM_LINK)}
+                    style={{ background: "#334155", color: "#fff", border: "1px solid #64748b", padding: "10px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", fontSize: "12px" }}
+                  >
+                    📤 Share
+                  </button>
+                  <button
+                    disabled={completedTasks.includes("major") || taskLoading === "major"}
+                    onClick={() => handleJoinBotTask("major", MAJOR_TELEGRAM_LINK, 100)}
+                    style={{ background: completedTasks.includes("major") ? "#334155" : "#0284c7", color: "#fff", border: "none", padding: "10px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", fontSize: "12px" }}
+                  >
+                    {completedTasks.includes("major") ? "Done ✅" : taskLoading === "major" ? "Checking..." : "🤖 Join Bot"}
+                  </button>
+                </div>
               </div>
 
-              <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontWeight: "bold", fontSize: "14px" }}>Visit AdDev Studio</div>
-                  <div style={{ color: "#94a3b8", fontSize: "11px" }}>Discover addev-studio.com</div>
-                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+50 ADC</div>
+              {/* Task 2: AdDev Studio */}
+              <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", border: "1px solid #334155" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                  <div>
+                    <div style={{ fontWeight: "bold", fontSize: "14px" }}>Visit AdDev Studio</div>
+                    <div style={{ color: "#94a3b8", fontSize: "11px" }}>Explore addev-studio.com</div>
+                    <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+50 ADC</div>
+                  </div>
                 </div>
-                <button
-                  disabled={completedTasks.includes("studio") || taskLoading === "studio"}
-                  onClick={() => handleCompleteTask("studio", ADDEV_STUDIO_LINK, 50)}
-                  style={{ background: completedTasks.includes("studio") ? "#334155" : "#0284c7", color: "#fff", border: "none", padding: "8px 14px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}
-                >
-                  {completedTasks.includes("studio") ? "Done ✅" : taskLoading === "studio" ? "Verifying..." : "Start"}
-                </button>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                  <button
+                    onClick={() => handleDirectShare("Visit AdDev Studio", "Explore addev-studio.com for awesome development solutions!", ADDEV_STUDIO_LINK)}
+                    style={{ background: "#334155", color: "#fff", border: "1px solid #64748b", padding: "10px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", fontSize: "12px" }}
+                  >
+                    📤 Share
+                  </button>
+                  <button
+                    disabled={completedTasks.includes("studio") || taskLoading === "studio"}
+                    onClick={() => handleJoinBotTask("studio", ADDEV_STUDIO_LINK, 50)}
+                    style={{ background: completedTasks.includes("studio") ? "#334155" : "#0284c7", color: "#fff", border: "none", padding: "10px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", fontSize: "12px" }}
+                  >
+                    {completedTasks.includes("studio") ? "Done ✅" : taskLoading === "studio" ? "Checking..." : "🌐 Visit Link"}
+                  </button>
+                </div>
               </div>
 
             </div>
           </div>
         )}
 
-        {/* 👥 INVITE */}
+        {/* 👥 INVITE & FRIENDS */}
         {activeTab === "invite" && (
           <div>
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>👥 Invite Friends</h2>
-            <div style={{ background: "#1e293b", padding: "20px", borderRadius: "16px", textAlign: "center", border: "1px solid #334155" }}>
-              <div style={{ fontSize: "40px", marginBottom: "8px" }}>🎁</div>
-              <h3 style={{ margin: "0 0 8px 0" }}>Earn +200 ADC</h3>
-              <p style={{ fontSize: "13px", color: "#94a3b8", marginBottom: "16px" }}>
-                Invite your friends and earn 200 ADC for each active user who joins through your link!
+            <div style={{ background: "#1e293b", padding: "20px", borderRadius: "16px", textAlign: "center", border: "1px solid #334155", marginBottom: "16px" }}>
+              <div style={{ fontSize: "36px", marginBottom: "6px" }}>🎁</div>
+              <h3 style={{ margin: "0 0 6px 0", fontSize: "16px" }}>Earn +200 ADC per Friend</h3>
+              <p style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "14px" }}>
+                Share your personal link and get rewarded when your friends join!
               </p>
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(referralLink);
                   alert("📋 Invite link copied to clipboard!");
                 }}
-                style={{ width: "100%", padding: "12px", background: "#334155", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" }}
+                style={{ width: "100%", padding: "12px", background: "linear-gradient(90deg, #0284c7, #38bdf8)", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", cursor: "pointer", fontSize: "14px" }}
               >
                 📋 Copy Invite Link
               </button>
+            </div>
+
+            <div style={{ background: "#1e293b", padding: "16px", borderRadius: "16px", border: "1px solid #334155" }}>
+              <h3 style={{ fontSize: "14px", margin: "0 0 10px 0", color: "#94a3b8" }}>Your Invited Friends ({invitedFriends.length})</h3>
+              {invitedFriends.length === 0 ? (
+                <div style={{ fontSize: "12px", color: "#64748b", textAlign: "center", padding: "12px" }}>No friends invited yet. Start sharing your link!</div>
+              ) : (
+                invitedFriends.map((friend, idx) => (
+                  <div key={idx} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #334155", fontSize: "13px" }}>
+                    <span>{friend.first_name || friend.username || "User"}</span>
+                    <span style={{ color: "#22c55e", fontWeight: "bold" }}>+200 ADC</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
@@ -613,6 +746,7 @@ export default function App() {
         <button onClick={() => setActiveTab("mining")} style={{ background: "none", border: "none", color: activeTab === "mining" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>⛏️<br/>Mining</button>
         <button onClick={() => setActiveTab("ads")} style={{ background: "none", border: "none", color: activeTab === "ads" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>📺<br/>Ads</button>
         <button onClick={() => setActiveTab("tasks")} style={{ background: "none", border: "none", color: activeTab === "tasks" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>📋<br/>Tasks</button>
+        <button onClick={() => setActiveTab("invite")} style={{ background: "none", border: "none", color: activeTab === "invite" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>👥<br/>Invite</button>
         <button onClick={() => setActiveTab("wallet")} style={{ background: "none", border: "none", color: activeTab === "wallet" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>💰<br/>Wallet</button>
       </div>
     </div>
