@@ -1,10 +1,9 @@
-
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("home");
   const [claimedDaily, setClaimedDaily] = useState(false);
-  const [streakDays, setStreakDays] = useState(3); // Dita e 3-të e check-in
+  const streakDays = 3; 
 
   const user = {
     first_name: "A S",
@@ -14,7 +13,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ background: "#0b132b", minHeight: "100vh", color: "#fff", fontFamily: "sans-serif", paddingBottom: "90px" }}>
+    <div style={{ background: "#0b132b", minHeight: "100vh", color: "#fff", fontFamily: "sans-serif", paddingBottom: "90px", boxSizing: "border-box" }}>
       
       {/* 🌟 HEADER / PROFILE CARD */}
       <div style={{ 
@@ -60,37 +59,50 @@ export default function App() {
       </div>
 
       {/* 📄 CONTENT AREA */}
-      <div style={{ padding: "20px" }}>
+      <div style={{ padding: "16px", maxWidth: "100%", overflowX: "hidden" }}>
         
-        {/* HOME TAB (Me elemente angazhimi: Daily Check-in & Mini Games) */}
+        {/* HOME TAB */}
         {activeTab === "home" && (
           <div>
-            {/* 🎁 DAILY CHECK-IN BOX (E mban përdoruesin të kthehet çdo ditë) */}
-            <div style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)", padding: "18px", borderRadius: "20px", border: "1px solid #334155", marginBottom: "16px" }}>
+            {/* 🎁 DAILY CHECK-IN BOX */}
+            <div style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)", padding: "16px", borderRadius: "20px", border: "1px solid #334155", marginBottom: "16px", boxSizing: "border-box" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                 <div>
                   <div style={{ fontWeight: "bold", fontSize: "15px" }}>📅 Daily Streak</div>
-                  <div style={{ fontSize: "12px", color: "#94a3b8" }}>Hyni çdo ditë për të fituar më shumë!</div>
+                  <div style={{ fontSize: "11px", color: "#94a3b8" }}>Hyni çdo ditë për të fituar më shumë!</div>
                 </div>
                 <div style={{ background: "#f59e0b", color: "#000", padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "bold" }}>
                   Dita {streakDays} / 7
                 </div>
               </div>
 
-              {/* Kutizat e 7 ditëve */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "6px", marginBottom: "14px" }}>
-                {[1, 2, 3, 4, 5, 6, 7].map((day) => (
-                  <div key={day} style={{ 
-                    background: day < streakDays ? "#065f46" : day === streakDays ? "#1d4ed8" : "#1e293b",
-                    border: `1px solid ${day === streakDays ? "#60a5fa" : "#334155"}`,
-                    borderRadius: "10px", padding: "8px 2px", textAlign: "center", fontSize: "11px"
-                  }}>
-                    <div style={{ color: "#94a3b8", fontSize: "10px" }}>D{day}</div>
-                    <div style={{ fontWeight: "bold", color: day < streakDays ? "#34d399" : "#fff", marginTop: "2px" }}>
-                      {day * 0.05}
+              {/* Kutizat e 7 ditëve - Rregulluar grid-i që të përshtatet perfekt */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px", marginBottom: "14px" }}>
+                {[
+                  { day: 1, val: "0.05" },
+                  { day: 2, val: "0.10" },
+                  { day: 3, val: "0.15" },
+                  { day: 4, val: "0.20" },
+                  { day: 5, val: "0.25" },
+                  { day: 6, val: "0.30" },
+                  { day: 7, val: "0.35" },
+                ].map((item) => {
+                  const isPast = item.day < streakDays;
+                  const isCurrent = item.day === streakDays;
+                  return (
+                    <div key={item.day} style={{ 
+                      background: isPast ? "#065f46" : isCurrent ? "#1d4ed8" : "#1e293b",
+                      border: `1px solid ${isCurrent ? "#60a5fa" : "#334155"}`,
+                      borderRadius: "8px", padding: "6px 2px", textAlign: "center", fontSize: "10px",
+                      overflow: "hidden"
+                    }}>
+                      <div style={{ color: "#94a3b8", fontSize: "9px" }}>D{item.day}</div>
+                      <div style={{ fontWeight: "bold", color: isPast ? "#34d399" : "#fff", marginTop: "2px", fontSize: "10px" }}>
+                        {item.val}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <button 
@@ -106,14 +118,14 @@ export default function App() {
               </button>
             </div>
 
-            {/* 🎡 LUCKY WHEEL PROMPT (Për të krijuar argëtim shtesë) */}
-            <div style={{ background: "linear-gradient(135deg, #312e81, #1e1b4b)", padding: "18px", borderRadius: "20px", border: "1px solid #4338ca", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            {/* 🎡 LUCKY WHEEL PROMPT */}
+            <div style={{ background: "linear-gradient(135deg, #312e81, #1e1b4b)", padding: "16px", borderRadius: "20px", border: "1px solid #4338ca", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
-                <div style={{ fontSize: "24px", marginBottom: "4px" }}>🎡</div>
+                <div style={{ fontSize: "22px", marginBottom: "2px" }}>🎡</div>
                 <div style={{ fontWeight: "bold", fontSize: "15px" }}>Rrota e Fatit</div>
-                <div style={{ fontSize: "12px", color: "#c7d2fe" }}>Rrotullo dhe fito deri në 1.00 TON</div>
+                <div style={{ fontSize: "11px", color: "#c7d2fe" }}>Rrotullo dhe fito deri në 1.00 TON</div>
               </div>
-              <button style={{ background: "#f59e0b", color: "#000", border: "none", padding: "10px 16px", borderRadius: "12px", fontWeight: "bold", fontSize: "13px", cursor: "pointer" }}>
+              <button style={{ background: "#f59e0b", color: "#000", border: "none", padding: "10px 14px", borderRadius: "12px", fontWeight: "bold", fontSize: "12px", cursor: "pointer", whiteSpace: "nowrap" }}>
                 Luaj Tani
               </button>
             </div>
