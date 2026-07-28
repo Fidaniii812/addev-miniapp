@@ -16,6 +16,11 @@ export default function App() {
   const [currentMined, setCurrentMined] = useState<number>(0);
   const [timeLeftStr, setTimeLeftStr] = useState<string>("");
 
+  // Wheel of Fortune States
+  const [wheelSpinsToday, setWheelSpinsToday] = useState<number>(0);
+  const [spinning, setSpinning] = useState<boolean>(false);
+  const [wheelResult, setWheelResult] = useState<string | null>(null);
+
   // Tasks verification states
   const [completedTasks, setCompletedTasks] = useState<string[]>([]);
   const [taskLoading, setTaskLoading] = useState<string | null>(null);
@@ -86,6 +91,7 @@ export default function App() {
           setAdsToday(existingUser.ads_watched_today || 0);
           setMiningLevel(existingUser.mining_level || 1);
           setMiningRate(existingUser.mining_rate || 5);
+          setWheelSpinsToday(existingUser.wheel_spins_today || 0);
           
           if (existingUser.completed_tasks && Array.isArray(existingUser.completed_tasks)) {
             setCompletedTasks(existingUser.completed_tasks);
@@ -122,6 +128,7 @@ export default function App() {
             ads_watched_today: 0,
             mining_level: 1,
             mining_rate: 5,
+            wheel_spins_today: 0,
             referred_by: referrerId,
             completed_tasks: [],
           };
@@ -153,7 +160,6 @@ export default function App() {
     );
   };
 
-  // Start Mining (24h)
   const handleStartMining = async () => {
     const startTime = Date.now();
     const endTime = startTime + 24 * 60 * 60 * 1000;
@@ -172,7 +178,6 @@ export default function App() {
     });
   };
 
-  // Claim Mining
   const handleClaimMining = async () => {
     const reward = miningRate * 24; 
     const newBalance = adcBalance + reward;
@@ -193,74 +198,35 @@ export default function App() {
     alert(`🎉 Successfully claimed +${reward} ADC!`);
   };
 
-  // ⭐️ Upgrade Mining Direct with Telegram Stars
-  const handleUpgradeWithStars = async () => {
-    const tg = (window as any).Telegram?.WebApp;
-    if (!tg) {
-      alert("Telegram WebApp interface not found.");
+  const handleSpinWheel = async () => {
+    if (wheelSpinsToday >= 3) {
+      alert("You have used all 3 free spins for today! Come back tomorrow.");
       return;
     }
 
-    if (!BOT_TOKEN) {
-      alert("Bot Token missing! Please set VITE_BOT_TOKEN in Vercel.");
-      return;
-    }
+    setSpinning(true);
+    setWheelResult(null);
 
-    try {
-      const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/createInvoiceLink`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: "Mining Speed Boost (Level 2)",
-          description: "Increase mining speed to 10 ADC/hr permanently",
-          payload: "mining_boost_level2",
-          currency: "XTR",
-          prices: [{ label: "Level 2 Boost", amount: 50 }],
-        }),
+    // Prizes pool: 10, 50, 100, 250, 500, 0 (Try again)
+    const prizes = [10, 25, 50, 100, 200, 500];
+    const randomPrize = prizes[Math.floor(Math.random() * prizes.length)];
+
+    setTimeout(async () => {
+      setSpinning(false);
+      const newBalance = adcBalance + randomPrize;
+      const newSpins = wheelSpinsToday + 1;
+
+      setAdcBalance(newBalance);
+      setWheelSpinsToday(newSpins);
+      setWheelResult(`🎉 You won +${randomPrize} ADC!`);
+
+      await saveUserData({
+        adc_balance: newBalance,
+        wheel_spins_today: newSpins,
       });
-
-      const data = await response.json();
-
-      if (data.ok && data.result) {
-        tg.openInvoice(data.result, async (status: string) => {
-          if (status === "paid") {
-            const newLevel = 2;
-            const newRate = 10;
-
-            setMiningLevel(newLevel);
-            setMiningRate(newRate);
-
-            await saveUserData({
-              mining_level: newLevel,
-              mining_rate: newRate,
-            });
-
-            await supabase.from("stars_payments").insert([
-              {
-                telegram_id: user?.id,
-                amount_stars: 50,
-                package_type: "mining_boost_level2",
-                status: "completed",
-              },
-            ]);
-
-            alert("🎉 Congratulations! Successfully upgraded to Mining Level 2 via Telegram Stars!");
-          } else if (status === "cancelled") {
-            alert("Payment was cancelled.");
-          } else {
-            alert("Payment status: " + status);
-          }
-        });
-      } else {
-        alert("Invoice creation failed: " + (data.description || "Invalid Bot Token or settings."));
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Network error while connecting to Telegram API.");
-    }
+    }, 2000);
   };
 
-  // Watch Ad
   const handleWatchAd = async () => {
     if (adsToday >= 10) {
       alert("Daily limit reached (10 Ads/day)!");
@@ -285,7 +251,6 @@ export default function App() {
     }, 3000);
   };
 
-  // Complete Tasks (Me ruajtje në databazë)
   const handleCompleteTask = (taskId: string, link: string, reward: number) => {
     if (completedTasks.includes(taskId)) {
       alert("You have already completed this task!");
@@ -311,7 +276,6 @@ export default function App() {
     }, 10000);
   };
 
-  // Withdraw Request
   const handleWithdrawRequest = async () => {
     if (!walletAddress || walletAddress.trim().length < 10) {
       alert("Please enter a valid wallet address!");
@@ -366,14 +330,90 @@ export default function App() {
 
       {/* Main Content Area */}
       <div style={{ padding: "16px" }}>
-        {/* 🏠 HOME */}
+        {/* 🏠 HOME - Redesigned & Interactive */}
         {activeTab === "home" && (
           <div>
-            <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>🏠 Dashboard</h2>
-            <div style={{ background: "linear-gradient(135deg, #0284c7, #0369a1)", padding: "20px", borderRadius: "16px", textAlign: "center", marginBottom: "16px" }}>
-              <div style={{ fontSize: "13px", color: "#e0f2fe" }}>Total Balance</div>
-              <div style={{ fontSize: "32px", fontWeight: "bold", margin: "6px 0" }}>${usdtEquivalent} USDT</div>
+            <div style={{ background: "linear-gradient(135deg, #0284c7, #0369a1)", padding: "20px", borderRadius: "16px", textAlign: "center", marginBottom: "16px", boxShadow: "0 10px 15px -3px rgba(2, 132, 199, 0.3)" }}>
+              <div style={{ fontSize: "13px", color: "#e0f2fe" }}>Total Balance Available</div>
+              <div style={{ fontSize: "34px", fontWeight: "bold", margin: "6px 0" }}>${usdtEquivalent} USDT</div>
               <div style={{ fontSize: "12px", color: "#bae6fd" }}>({adcBalance.toLocaleString()} ADC)</div>
+            </div>
+
+            {/* Quick Actions Grid */}
+            <h3 style={{ fontSize: "15px", marginBottom: "10px", color: "#94a3b8" }}>⚡ Quick Actions</h3>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "16px" }}>
+              <button 
+                onClick={() => setActiveTab("mining")} 
+                style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: "14px", padding: "16px", textAlign: "left", cursor: "pointer", color: "#fff" }}
+              >
+                <div style={{ fontSize: "22px", marginBottom: "6px" }}>⛏️</div>
+                <div style={{ fontWeight: "bold", fontSize: "14px" }}>Cloud Mining</div>
+                <div style={{ fontSize: "11px", color: "#38bdf8", marginTop: "2px" }}>{miningRate} ADC/hr</div>
+              </button>
+
+              <button 
+                onClick={() => setActiveTab("wheel")} 
+                style={{ background: "#1e293b", border: "1px solid #eab308", borderRadius: "14px", padding: "16px", textAlign: "left", cursor: "pointer", color: "#fff" }}
+              >
+                <div style={{ fontSize: "22px", marginBottom: "6px" }}>🎡</div>
+                <div style={{ fontWeight: "bold", fontSize: "14px" }}>Lucky Wheel</div>
+                <div style={{ fontSize: "11px", color: "#eab308", marginTop: "2px" }}>{3 - wheelSpinsToday} spins left</div>
+              </button>
+            </div>
+
+            {/* Banner to Watch Ads directly from Home */}
+            <div style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)", padding: "16px", borderRadius: "16px", border: "1px solid #38bdf8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontWeight: "bold", fontSize: "14px" }}>📺 Watch Ad & Earn</div>
+                <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>Earn +10 ADC instantly ({adsToday}/10)</div>
+              </div>
+              <button 
+                onClick={handleWatchAd} 
+                disabled={adsToday >= 10}
+                style={{ background: adsToday >= 10 ? "#475569" : "#16a34a", color: "#fff", border: "none", padding: "10px 14px", borderRadius: "10px", fontWeight: "bold", cursor: "pointer", fontSize: "12px" }}
+              >
+                {adsToday >= 10 ? "Done" : "Watch (+10)"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 🎡 LUCKY WHEEL (New Feature) */}
+        {activeTab === "wheel" && (
+          <div>
+            <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>🎡 Lucky Wheel of Fortune</h2>
+            <div style={{ background: "#1e293b", padding: "24px", borderRadius: "16px", border: "1px solid #eab308", textAlign: "center", marginBottom: "16px" }}>
+              <div style={{ fontSize: "60px", marginBottom: "10px" }}>
+                {spinning ? "🌀" : "🎯"}
+              </div>
+              <h3 style={{ margin: "0 0 8px 0", fontSize: "18px", color: "#eab308" }}>Spin & Win Big Rewards!</h3>
+              <p style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "16px" }}>
+                Test your luck! You have <strong style={{ color: "#fff" }}>{3 - wheelSpinsToday}</strong> free spins remaining today.
+              </p>
+
+              {wheelResult && (
+                <div style={{ background: "#0f172a", padding: "12px", borderRadius: "10px", marginBottom: "16px", color: "#22c55e", fontWeight: "bold", fontSize: "15px", border: "1px solid #22c55e" }}>
+                  {wheelResult}
+                </div>
+              )}
+
+              <button 
+                onClick={handleSpinWheel} 
+                disabled={spinning || wheelSpinsToday >= 3}
+                style={{ 
+                  width: "100%", 
+                  padding: "14px", 
+                  borderRadius: "12px", 
+                  border: "none", 
+                  background: wheelSpinsToday >= 3 ? "#334155" : "linear-gradient(90deg, #eab308, #ca8a04)", 
+                  color: wheelSpinsToday >= 3 ? "#94a3b8" : "#000", 
+                  fontWeight: "bold", 
+                  cursor: wheelSpinsToday >= 3 ? "not-allowed" : "pointer",
+                  fontSize: "15px"
+                }}
+              >
+                {spinning ? "Spinning..." : wheelSpinsToday >= 3 ? "No Spins Left Today" : "🎲 Spin the Wheel!"}
+              </button>
             </div>
           </div>
         )}
@@ -430,16 +470,6 @@ export default function App() {
                 </button>
               )}
             </div>
-
-            {miningLevel < 2 && (
-              <div style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)", padding: "16px", borderRadius: "16px", border: "1px solid #eab308" }}>
-                <h3 style={{ margin: "0 0 8px 0", fontSize: "16px", color: "#eab308" }}>⚡ Boost Speed to 10 ADC/hr</h3>
-                <p style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "12px" }}>Double your daily production using Telegram Stars:</p>
-                <button onClick={handleUpgradeWithStars} style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: "linear-gradient(90deg, #eab308, #ca8a04)", color: "#000", fontWeight: "bold", cursor: "pointer" }}>
-                  ⭐ Upgrade with 50 Telegram Stars
-                </button>
-              </div>
-            )}
           </div>
         )}
 
@@ -498,21 +528,6 @@ export default function App() {
                 </button>
               </div>
 
-              <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontWeight: "bold", fontSize: "14px" }}>Explore AdDev Mini App</div>
-                  <div style={{ color: "#94a3b8", fontSize: "11px" }}>Check out our main platform version</div>
-                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+50 ADC</div>
-                </div>
-                <button
-                  disabled={completedTasks.includes("miniapp") || taskLoading === "miniapp"}
-                  onClick={() => handleCompleteTask("miniapp", ADDEV_MINIAPP_LINK, 50)}
-                  style={{ background: completedTasks.includes("miniapp") ? "#334155" : "#0284c7", color: "#fff", border: "none", padding: "8px 14px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}
-                >
-                  {completedTasks.includes("miniapp") ? "Done ✅" : taskLoading === "miniapp" ? "Verifying..." : "Start"}
-                </button>
-              </div>
-
             </div>
           </div>
         )}
@@ -527,29 +542,15 @@ export default function App() {
               <p style={{ fontSize: "13px", color: "#94a3b8", marginBottom: "16px" }}>
                 Invite your friends and earn 200 ADC for each active user who joins through your link!
               </p>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                <button
-                  onClick={() => {
-                    const text = encodeURIComponent("🚀 Join AdDev Rewards and start mining ADC & earning rewards with me!");
-                    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${text}`;
-                    window.open(shareUrl, "_blank");
-                  }}
-                  style={{ width: "100%", padding: "12px", background: "linear-gradient(90deg, #0284c7, #38bdf8)", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" }}
-                >
-                  📤 Share with Friends
-                </button>
-
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(referralLink);
-                    alert("📋 Invite link copied to clipboard!");
-                  }}
-                  style={{ width: "100%", padding: "12px", background: "#334155", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" }}
-                >
-                  📋 Copy Invite Link
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(referralLink);
+                  alert("📋 Invite link copied to clipboard!");
+                }}
+                style={{ width: "100%", padding: "12px", background: "#334155", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" }}
+              >
+                📋 Copy Invite Link
+              </button>
             </div>
           </div>
         )}
@@ -598,7 +599,7 @@ export default function App() {
                   cursor: adcBalance >= 15000 ? "pointer" : "not-allowed"
                 }}
               >
-                {adcBalance >= 15000 ? "Submit Withdrawal Request ($15 USDT)" : `Need ${(15000 - adcBalance).toLocaleString()} more ADC`}
+                {adcBalance >= 15000 ? "Submit Withdrawal Request" : `Need ${(15000 - adcBalance).toLocaleString()} more ADC`}
               </button>
             </div>
           </div>
@@ -608,10 +609,10 @@ export default function App() {
       {/* Bottom Navigation */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#0f172a", borderTop: "1px solid #334155", display: "flex", justifyContent: "space-around", padding: "8px 0", zIndex: 100 }}>
         <button onClick={() => setActiveTab("home")} style={{ background: "none", border: "none", color: activeTab === "home" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>🏠<br/>Home</button>
-        <button onClick={() => setActiveTab("mining")} style={{ background: "none", border: "none", color: activeTab === "mining" ? "#eab308" : "#64748b", fontSize: "11px", cursor: "pointer" }}>⛏️<br/>Mining</button>
-        <button onClick={{}} onClick={() => setActiveTab("ads")} style={{ background: "none", border: "none", color: activeTab === "ads" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>📺<br/>Ads</button>
+        <button onClick={() => setActiveTab("wheel")} style={{ background: "none", border: "none", color: activeTab === "wheel" ? "#eab308" : "#64748b", fontSize: "11px", cursor: "pointer" }}>🎡<br/>Wheel</button>
+        <button onClick={() => setActiveTab("mining")} style={{ background: "none", border: "none", color: activeTab === "mining" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>⛏️<br/>Mining</button>
+        <button onClick={() => setActiveTab("ads")} style={{ background: "none", border: "none", color: activeTab === "ads" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>📺<br/>Ads</button>
         <button onClick={() => setActiveTab("tasks")} style={{ background: "none", border: "none", color: activeTab === "tasks" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>📋<br/>Tasks</button>
-        <button onClick={() => setActiveTab("invite")} style={{ background: "none", border: "none", color: activeTab === "invite" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>👥<br/>Invite</button>
         <button onClick={() => setActiveTab("wallet")} style={{ background: "none", border: "none", color: activeTab === "wallet" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>💰<br/>Wallet</button>
       </div>
     </div>
