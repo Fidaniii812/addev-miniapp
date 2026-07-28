@@ -1,14 +1,48 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("home");
+  const [balance, setBalance] = useState(5.34);
   const [claimedDaily, setClaimedDaily] = useState(false);
   const streakDays = 3; 
+
+  // Shtesë për dinamikë: Sistemi i Minimit me Kohëmatës (Countdown)
+  const [timeLeft, setTimeLeft] = useState(10800); // 3 orë në sekonda
+  const [isReadyToClaim, setIsReadyToClaim] = useState(false);
+
+  // Llogaritësi i kohëmatësit
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          setIsReadyToClaim(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Formatimi i kohës (HH:MM:SS)
+  const formatTime = (seconds) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const handleClaimMining = () => {
+    if (isReadyToClaim) {
+      setBalance((prev) => +(prev + 0.25).toFixed(2));
+      setIsReadyToClaim(false);
+      setTimeLeft(10800); // Rinis kohëmatësin për 3 orë
+    }
+  };
 
   const user = {
     first_name: "A S",
     id: "8508477699",
-    balance: "5.34",
     currency: "TON"
   };
 
@@ -44,7 +78,7 @@ export default function App() {
         <div style={{ background: "rgba(0, 0, 0, 0.2)", padding: "16px", borderRadius: "16px", backdropFilter: "blur(10px)" }}>
           <div style={{ fontSize: "12px", color: "#93c5fd", textTransform: "uppercase", letterSpacing: "0.5px" }}>Total Balance</div>
           <div style={{ fontSize: "32px", fontWeight: "bold", margin: "4px 0", color: "#fff" }}>
-            {user.balance} <span style={{ fontSize: "18px", color: "#60a5fa" }}>{user.currency}</span>
+            {balance} <span style={{ fontSize: "18px", color: "#60a5fa" }}>{user.currency}</span>
           </div>
           <div style={{ fontSize: "11px", color: "#cbd5e1" }}>Available to withdraw</div>
         </div>
@@ -61,11 +95,39 @@ export default function App() {
       {/* 📄 CONTENT AREA */}
       <div style={{ padding: "16px", maxWidth: "100%", overflowX: "hidden" }}>
         
-        {/* HOME TAB */}
+        {/* HOME TAB (Dinamike & Interaktive) */}
         {activeTab === "home" && (
           <div>
+            {/* ⚡ ACTIVE MINING / FARMING BOX (E mban përdoruesin të kthehet çdo pak orë) */}
+            <div style={{ background: "linear-gradient(135deg, #1e1b4b, #312e81)", padding: "20px", borderRadius: "20px", border: "1px solid #4338ca", marginBottom: "16px", textAlign: "center" }}>
+              <div style={{ fontSize: "32px", marginBottom: "6px" }}>⛏️</div>
+              <div style={{ fontWeight: "bold", fontSize: "16px" }}>Aktiviteti i Minimit</div>
+              <div style={{ fontSize: "12px", color: "#c7d2fe", marginBottom: "14px" }}>Mblidhni fitimin tuaj çdo 3 orë!</div>
+
+              <div style={{ background: "rgba(0,0,0,0.3)", padding: "12px", borderRadius: "12px", marginBottom: "14px" }}>
+                <div style={{ fontSize: "11px", color: "#93c5fd" }}>Koha e mbetur / Statusi</div>
+                <div style={{ fontSize: "22px", fontWeight: "bold", color: isReadyToClaim ? "#34d399" : "#f59e0b", marginTop: "4px" }}>
+                  {isReadyToClaim ? "Gati për tu marrë!" : formatTime(timeLeft)}
+                </div>
+              </div>
+
+              <button 
+                onClick={handleClaimMining}
+                disabled={!isReadyToClaim}
+                style={{ 
+                  width: "100%", 
+                  background: isReadyToClaim ? "linear-gradient(90deg, #10b981, #059669)" : "#334155", 
+                  color: isReadyToClaim ? "#fff" : "#94a3b8", 
+                  border: "none", padding: "12px", borderRadius: "12px", 
+                  fontWeight: "bold", fontSize: "14px", cursor: isReadyToClaim ? "pointer" : "default" 
+                }}
+              >
+                {isReadyToClaim ? "🎁 Mblidh +0.25 TON" : "⏳ Duke u minuar..."}
+              </button>
+            </div>
+
             {/* 🎁 DAILY CHECK-IN BOX */}
-            <div style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)", padding: "16px", borderRadius: "20px", border: "1px solid #334155", marginBottom: "16px", boxSizing: "border-box" }}>
+            <div style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)", padding: "16px", borderRadius: "20px", border: "1px solid #334155", marginBottom: "16px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                 <div>
                   <div style={{ fontWeight: "bold", fontSize: "15px" }}>📅 Daily Streak</div>
@@ -76,16 +138,10 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Kutizat e 7 ditëve - Rregulluar grid-i që të përshtatet perfekt */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px", marginBottom: "14px" }}>
                 {[
-                  { day: 1, val: "0.05" },
-                  { day: 2, val: "0.10" },
-                  { day: 3, val: "0.15" },
-                  { day: 4, val: "0.20" },
-                  { day: 5, val: "0.25" },
-                  { day: 6, val: "0.30" },
-                  { day: 7, val: "0.35" },
+                  { day: 1, val: "0.05" }, { day: 2, val: "0.10" }, { day: 3, val: "0.15" },
+                  { day: 4, val: "0.20" }, { day: 5, val: "0.25" }, { day: 6, val: "0.30" }, { day: 7, val: "0.35" }
                 ].map((item) => {
                   const isPast = item.day < streakDays;
                   const isCurrent = item.day === streakDays;
@@ -93,8 +149,7 @@ export default function App() {
                     <div key={item.day} style={{ 
                       background: isPast ? "#065f46" : isCurrent ? "#1d4ed8" : "#1e293b",
                       border: `1px solid ${isCurrent ? "#60a5fa" : "#334155"}`,
-                      borderRadius: "8px", padding: "6px 2px", textAlign: "center", fontSize: "10px",
-                      overflow: "hidden"
+                      borderRadius: "8px", padding: "6px 2px", textAlign: "center", fontSize: "10px", overflow: "hidden"
                     }}>
                       <div style={{ color: "#94a3b8", fontSize: "9px" }}>D{item.day}</div>
                       <div style={{ fontWeight: "bold", color: isPast ? "#34d399" : "#fff", marginTop: "2px", fontSize: "10px" }}>
@@ -114,19 +169,7 @@ export default function App() {
                   borderRadius: "12px", fontWeight: "bold", fontSize: "13px", cursor: claimedDaily ? "default" : "pointer" 
                 }}
               >
-                {claimedDaily ? "✓ Shpërblimi u mor sot"  : "🎁 Merr Shpërblimin Ditor (+0.15 TON)"}
-              </button>
-            </div>
-
-            {/* 🎡 LUCKY WHEEL PROMPT */}
-            <div style={{ background: "linear-gradient(135deg, #312e81, #1e1b4b)", padding: "16px", borderRadius: "20px", border: "1px solid #4338ca", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div>
-                <div style={{ fontSize: "22px", marginBottom: "2px" }}>🎡</div>
-                <div style={{ fontWeight: "bold", fontSize: "15px" }}>Rrota e Fatit</div>
-                <div style={{ fontSize: "11px", color: "#c7d2fe" }}>Rrotullo dhe fito deri në 1.00 TON</div>
-              </div>
-              <button style={{ background: "#f59e0b", color: "#000", border: "none", padding: "10px 14px", borderRadius: "12px", fontWeight: "bold", fontSize: "12px", cursor: "pointer", whiteSpace: "nowrap" }}>
-                Luaj Tani
+                {claimedDaily ? "✓ Shpërblimi u mor sot" : "🎁 Merr Shpërblimin Ditor (+0.15 TON)"}
               </button>
             </div>
           </div>
