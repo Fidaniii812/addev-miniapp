@@ -7,7 +7,7 @@ export default function App() {
   const [adcBalance, setAdcBalance] = useState<number>(0);
   const [adsToday, setAdsToday] = useState<number>(0);
 
-  // Mining States (Base level: 5 ADC/hr)
+  // Mining States
   const [miningLevel, setMiningLevel] = useState<number>(1);
   const [miningRate, setMiningRate] = useState<number>(5);
   const [miningActive, setMiningActive] = useState<boolean>(false);
@@ -23,7 +23,7 @@ export default function App() {
   // Wallet State
   const [walletAddress, setWalletAddress] = useState<string>("");
 
-  // ⚙️ LINKS & BOT CONFIGURATION (Marrë nga Environment Variables për siguri)
+  // ⚙️ LINKS & BOT CONFIGURATION
   const BOT_USERNAME = "addev_rewards_bot";
   const BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN || "";
 
@@ -36,7 +36,7 @@ export default function App() {
     initTelegramUser();
   }, []);
 
-  // Live Mining & Countdown timer logic (Updates every second)
+  // Live Mining & Countdown timer logic
   useEffect(() => {
     let interval: any = null;
     if (miningActive && miningEndTime && miningStartTime) {
@@ -44,14 +44,14 @@ export default function App() {
         const now = Date.now();
         const diff = miningEndTime - now;
 
-        // Llogarit sa pikë janë gjeneruar deri tani në kohë reale (Live from 0)
         const elapsedHours = (now - miningStartTime) / (1000 * 60 * 60);
-        const minedSoFar = Math.min(elapsedHours * miningRate, miningRate * 24);
+        const maxMined = miningRate * 24;
+        const minedSoFar = Math.min(elapsedHours * miningRate, maxMined);
         setCurrentMined(minedSoFar);
 
         if (diff <= 0) {
           setMiningActive(false);
-          setCurrentMined(miningRate * 24);
+          setCurrentMined(maxMined);
           setTimeLeftStr("Ready to Claim!");
           clearInterval(interval);
         } else {
@@ -86,6 +86,10 @@ export default function App() {
           setAdsToday(existingUser.ads_watched_today || 0);
           setMiningLevel(existingUser.mining_level || 1);
           setMiningRate(existingUser.mining_rate || 5);
+          
+          if (existingUser.completed_tasks && Array.isArray(existingUser.completed_tasks)) {
+            setCompletedTasks(existingUser.completed_tasks);
+          }
 
           if (existingUser.mining_end_time && existingUser.mining_start_time) {
             const start = new Date(existingUser.mining_start_time).getTime();
@@ -93,13 +97,16 @@ export default function App() {
             setMiningStartTime(start);
             setMiningEndTime(end);
 
-            if (end > Date.now()) {
+            const now = Date.now();
+            const maxMined = (existingUser.mining_rate || 5) * 24;
+
+            if (end > now) {
               setMiningActive(true);
-              const elapsedHours = (Date.now() - start) / (1000 * 60 * 60);
-              setCurrentMined(Math.min(elapsedHours * (existingUser.mining_rate || 5), (existingUser.mining_rate || 5) * 24));
+              const elapsedHours = (now - start) / (1000 * 60 * 60);
+              setCurrentMined(Math.min(elapsedHours * (existingUser.mining_rate || 5), maxMined));
             } else {
               setMiningActive(false);
-              setCurrentMined((existingUser.mining_rate || 5) * 24);
+              setCurrentMined(maxMined);
               setTimeLeftStr("Ready to Claim!");
             }
           }
@@ -116,6 +123,7 @@ export default function App() {
             mining_level: 1,
             mining_rate: 5,
             referred_by: referrerId,
+            completed_tasks: [],
           };
 
           const { data: createdUser } = await supabase
@@ -252,7 +260,7 @@ export default function App() {
     }
   };
 
-  // Watch Ad (Limit 10 ads/day)
+  // Watch Ad
   const handleWatchAd = async () => {
     if (adsToday >= 10) {
       alert("Daily limit reached (10 Ads/day)!");
@@ -277,7 +285,7 @@ export default function App() {
     }, 3000);
   };
 
-  // Complete Tasks with Timer Verification & Official Links
+  // Complete Tasks (Me ruajtje në databazë)
   const handleCompleteTask = (taskId: string, link: string, reward: number) => {
     if (completedTasks.includes(taskId)) {
       alert("You have already completed this task!");
@@ -289,11 +297,16 @@ export default function App() {
 
     setTimeout(async () => {
       const newBalance = adcBalance + reward;
+      const updatedTasks = [...completedTasks, taskId];
+      
       setAdcBalance(newBalance);
-      setCompletedTasks((prev) => [...prev, taskId]);
+      setCompletedTasks(updatedTasks);
       setTaskLoading(null);
 
-      await saveUserData({ adc_balance: newBalance });
+      await saveUserData({ 
+        adc_balance: newBalance,
+        completed_tasks: updatedTasks 
+      });
       alert(`✅ Task verified! Earned +${reward} ADC!`);
     }, 10000);
   };
@@ -333,6 +346,7 @@ export default function App() {
   };
 
   const usdtEquivalent = (adcBalance / 1000).toFixed(2);
+  const referralLink = `https://t.me/${BOT_USERNAME}/addev_rewards?startapp=${user?.id || ""}`;
 
   return (
     <div style={{ background: "#0f172a", minHeight: "100vh", color: "#fff", fontFamily: "sans-serif", paddingBottom: "90px" }}>
@@ -364,7 +378,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ⛏️ MINING (Live Counter & Claim) */}
+        {/* ⛏️ MINING */}
         {activeTab === "mining" && (
           <div>
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>⛏️ Cloud Mining</h2>
@@ -394,13 +408,13 @@ export default function App() {
                     <div style={{ fontSize: "18px", fontWeight: "bold", color: "#22c55e", marginTop: "4px" }}>+{miningRate * 24} ADC Ready</div>
                   </>
                 ) : (
-                  <div style={{ fontSize: "13px", color: "#94a3b8" }}>Mining is inactive. Click below to start 24h mining!</div>
+                  <div style={{ fontSize: "13px", color: "#94a3b8" }}>Mining is inactive. Click below to start mining!</div>
                 )}
               </div>
 
               {!miningActive && !miningEndTime && (
                 <button onClick={handleStartMining} style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: "linear-gradient(90deg, #0284c7, #38bdf8)", color: "#fff", fontWeight: "bold", cursor: "pointer" }}>
-                  ▶ Start Mining ({miningRate * 24} ADC / 24h)
+                  ▶ Start Mining
                 </button>
               )}
 
@@ -448,7 +462,7 @@ export default function App() {
           </div>
         )}
 
-        {/* 📋 TASKS (Me linkat e tua zyrtare) */}
+        {/* 📋 TASKS */}
         {activeTab === "tasks" && (
           <div>
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>📋 Tasks & Partner Deals</h2>
@@ -503,7 +517,7 @@ export default function App() {
           </div>
         )}
 
-        {/* 👥 FRIENDS / INVITE (Me linkun e saktë të botit të ri) */}
+        {/* 👥 INVITE */}
         {activeTab === "invite" && (
           <div>
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>👥 Invite Friends</h2>
@@ -513,16 +527,29 @@ export default function App() {
               <p style={{ fontSize: "13px", color: "#94a3b8", marginBottom: "16px" }}>
                 Invite your friends and earn 200 ADC for each active user who joins through your link!
               </p>
-              <button
-                onClick={() => {
-                  const refLink = `https://t.me/${BOT_USERNAME}/addev_rewards?startapp=${user?.id || ""}`;
-                  navigator.clipboard.writeText(refLink);
-                  alert(`Referral link copied: ${refLink}`);
-                }}
-                style={{ width: "100%", padding: "12px", background: "#0284c7", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" }}
-              >
-                📋 Copy Referral Link
-              </button>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                <button
+                  onClick={() => {
+                    const text = encodeURIComponent("🚀 Join AdDev Rewards and start mining ADC & earning rewards with me!");
+                    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${text}`;
+                    window.open(shareUrl, "_blank");
+                  }}
+                  style={{ width: "100%", padding: "12px", background: "linear-gradient(90deg, #0284c7, #38bdf8)", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" }}
+                >
+                  📤 Share with Friends
+                </button>
+
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(referralLink);
+                    alert("📋 Invite link copied to clipboard!");
+                  }}
+                  style={{ width: "100%", padding: "12px", background: "#334155", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" }}
+                >
+                  📋 Copy Invite Link
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -582,7 +609,7 @@ export default function App() {
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#0f172a", borderTop: "1px solid #334155", display: "flex", justifyContent: "space-around", padding: "8px 0", zIndex: 100 }}>
         <button onClick={() => setActiveTab("home")} style={{ background: "none", border: "none", color: activeTab === "home" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>🏠<br/>Home</button>
         <button onClick={() => setActiveTab("mining")} style={{ background: "none", border: "none", color: activeTab === "mining" ? "#eab308" : "#64748b", fontSize: "11px", cursor: "pointer" }}>⛏️<br/>Mining</button>
-        <button onClick={() => setActiveTab("ads")} style={{ background: "none", border: "none", color: activeTab === "ads" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>📺<br/>Ads</button>
+        <button onClick={{}} onClick={() => setActiveTab("ads")} style={{ background: "none", border: "none", color: activeTab === "ads" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>📺<br/>Ads</button>
         <button onClick={() => setActiveTab("tasks")} style={{ background: "none", border: "none", color: activeTab === "tasks" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>📋<br/>Tasks</button>
         <button onClick={() => setActiveTab("invite")} style={{ background: "none", border: "none", color: activeTab === "invite" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>👥<br/>Invite</button>
         <button onClick={() => setActiveTab("wallet")} style={{ background: "none", border: "none", color: activeTab === "wallet" ? "#38bdf8" : "#64748b", fontSize: "11px", cursor: "pointer" }}>💰<br/>Wallet</button>
