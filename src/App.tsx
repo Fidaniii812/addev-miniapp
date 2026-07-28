@@ -7,7 +7,7 @@ export default function App() {
   const [adcBalance, setAdcBalance] = useState<number>(0);
   const [adsToday, setAdsToday] = useState<number>(0);
 
-  // Mining States
+  // Mining States (Rregulluar shpejtësia në 5 ADC/hr si parazgjedhje)
   const [miningLevel, setMiningLevel] = useState<number>(1);
   const [miningRate, setMiningRate] = useState<number>(5);
   const [miningActive, setMiningActive] = useState<boolean>(false);
@@ -16,13 +16,13 @@ export default function App() {
   const [currentMined, setCurrentMined] = useState<number>(0);
   const [timeLeftStr, setTimeLeftStr] = useState<string>("");
 
-  // Wheel of Fortune States (Real Spinning Animation Visuals)
+  // Wheel of Fortune States
   const [wheelSpinsToday, setWheelSpinsToday] = useState<number>(0);
   const [spinning, setSpinning] = useState<boolean>(false);
   const [wheelResult, setWheelResult] = useState<string | null>(null);
   const [wheelRotation, setWheelRotation] = useState<number>(0);
 
-  // Multi-Ad Watching States (3 Ads in a row, 5s each)
+  // Multi-Ad Watching States
   const [adBatchActive, setAdBatchActive] = useState<boolean>(false);
   const [currentAdIndex, setCurrentAdIndex] = useState<number>(1);
   const [totalAdsInBatch] = useState<number>(3);
@@ -43,6 +43,10 @@ export default function App() {
   const MONETAG_LINK = "https://omg10.com/4/10168362";
   const MAJOR_TELEGRAM_LINK = "https://t.me/major/start?startapp=8508477699";
   const ADDEV_STUDIO_LINK = "https://addev-studio.com";
+  const OFFICIAL_BOT_LINK = `https://t.me/${BOT_USERNAME}`;
+
+  // Çmimet e rrotës për t'i shfaqur vizualisht
+  const wheelPrizes = [10, 25, 50, 100, 200, 500];
 
   useEffect(() => {
     initTelegramUser();
@@ -132,12 +136,13 @@ export default function App() {
             setMiningEndTime(end);
 
             const now = Date.now();
-            const maxMined = (existingUser.mining_rate || 5) * 24;
+            const rateVal = existingUser.mining_rate || 5;
+            const maxMined = rateVal * 24;
 
             if (end > now) {
               setMiningActive(true);
               const elapsedHours = (now - start) / (1000 * 60 * 60);
-              setCurrentMined(Math.min(elapsedHours * (existingUser.mining_rate || 5), maxMined));
+              setCurrentMined(Math.min(elapsedHours * rateVal, maxMined));
             } else {
               setMiningActive(false);
               setCurrentMined(maxMined);
@@ -172,7 +177,6 @@ export default function App() {
           }
         }
 
-        // Fetch referred friends
         const { data: friends } = await supabase
           .from("users")
           .select("first_name, username, adc_balance")
@@ -236,7 +240,6 @@ export default function App() {
     alert(`🎉 Successfully claimed +${reward} ADC!`);
   };
 
-  // True Spinning Wheel Animation Logic
   const handleSpinWheel = () => {
     if (wheelSpinsToday >= 3) {
       alert("You have used all 3 free spins for today! Come back tomorrow.");
@@ -246,11 +249,10 @@ export default function App() {
     setSpinning(true);
     setWheelResult(null);
 
-    const prizes = [10, 25, 50, 100, 200, 500];
-    const randomIndex = Math.floor(Math.random() * prizes.length);
-    const randomPrize = prizes[randomIndex];
+    const randomIndex = Math.floor(Math.random() * wheelPrizes.length);
+    const randomPrize = wheelPrizes[randomIndex];
 
-    const extraDegrees = 360 * 5 + randomIndex * (360 / prizes.length);
+    const extraDegrees = 360 * 5 + randomIndex * (360 / wheelPrizes.length);
     setWheelRotation((prev) => prev + extraDegrees);
 
     setTimeout(async () => {
@@ -297,7 +299,6 @@ export default function App() {
     alert("🎉 All 3 ads completed successfully! Earned +30 ADC!");
   };
 
-  // Direct Share Function (without manual copying)
   const handleDirectShare = (title: string, text: string, url: string) => {
     if (navigator.share) {
       navigator.share({
@@ -306,7 +307,6 @@ export default function App() {
         url: url,
       }).catch((error) => console.log("Sharing failed", error));
     } else {
-      // Fallback for desktop/unsupported browsers using Telegram sharing intent
       const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
       window.open(shareUrl, "_blank");
     }
@@ -436,13 +436,17 @@ export default function App() {
           </div>
         )}
 
-        {/* 🎡 LUCKY WHEEL */}
+        {/* 🎡 LUCKY WHEEL (Me numrat e shfaqur brenda fildave të rrotës) */}
         {activeTab === "wheel" && (
           <div>
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>🎡 Lucky Wheel of Fortune</h2>
             <div style={{ background: "#1e293b", padding: "20px", borderRadius: "16px", border: "1px solid #eab308", textAlign: "center", marginBottom: "16px" }}>
               
-              <div style={{ position: "relative", width: "180px", height: "180px", margin: "0 auto 16px auto" }}>
+              <div style={{ position: "relative", width: "220px", height: "220px", margin: "0 auto 16px auto" }}>
+                {/* Shigjeta lart */}
+                <div style={{ position: "absolute", top: "-14px", left: "calc(50% - 12px)", width: "0", height: "0", borderLeft: "12px solid transparent", borderRight: "12px solid transparent", borderBottom: "22px solid #ef4444", zIndex: 20, filter: "drop-shadow(0 2px 2px rgba(0,0,0,0.5))" }}></div>
+
+                {/* Rrota */}
                 <div style={{
                   width: "100%",
                   height: "100%",
@@ -452,13 +456,20 @@ export default function App() {
                   boxShadow: "0 0 15px rgba(234, 179, 8, 0.5)",
                   transform: `rotate(${wheelRotation}deg)`,
                   transition: spinning ? "transform 3s cubic-bezier(0.15, 0.9, 0.2, 1)" : "none",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center"
+                  position: "relative",
+                  overflow: "hidden"
                 }}>
-                  <div style={{ width: "40px", height: "40px", background: "#0f172a", borderRadius: "50%", border: "2px solid #fff" }}></div>
+                  {/* Numrat e vendosur brenda çdo seksioni */}
+                  <span style={{ position: "absolute", top: "25%", left: "62%", transform: "rotate(30deg)", fontWeight: "bold", fontSize: "14px", color: "#000", textShadow: "0 1px 0 rgba(255,255,255,0.6)" }}>10</span>
+                  <span style={{ position: "absolute", top: "52%", left: "70%", transform: "rotate(90deg)", fontWeight: "bold", fontSize: "14px", color: "#000", textShadow: "0 1px 0 rgba(255,255,255,0.6)" }}>25</span>
+                  <span style={{ position: "absolute", top: "72%", left: "55%", transform: "rotate(150deg)", fontWeight: "bold", fontSize: "14px", color: "#000", textShadow: "0 1px 0 rgba(255,255,255,0.6)" }}>50</span>
+                  <span style={{ position: "absolute", top: "65%", left: "28%", transform: "rotate(210deg)", fontWeight: "bold", fontSize: "14px", color: "#fff", textShadow: "0 1px 0 rgba(0,0,0,0.6)" }}>100</span>
+                  <span style={{ position: "absolute", top: "42%", left: "18%", transform: "rotate(270deg)", fontWeight: "bold", fontSize: "14px", color: "#fff", textShadow: "0 1px 0 rgba(0,0,0,0.6)" }}>200</span>
+                  <span style={{ position: "absolute", top: "20%", left: "35%", transform: "rotate(330deg)", fontWeight: "bold", fontSize: "14px", color: "#fff", textShadow: "0 1px 0 rgba(0,0,0,0.6)" }}>500</span>
+
+                  {/* Qendra e rrotës */}
+                  <div style={{ position: "absolute", top: "calc(50% - 20px)", left: "calc(50% - 20px)", width: "40px", height: "40px", background: "#0f172a", borderRadius: "50%", border: "2px solid #fff", zIndex: 10 }}></div>
                 </div>
-                <div style={{ position: "absolute", top: "-10px", left: "calc(50% - 10px)", width: "0", height: "0", borderLeft: "10px solid transparent", borderRight: "10px solid transparent", borderBottom: "18px solid #ef4444" }}></div>
               </div>
 
               <h3 style={{ margin: "0 0 6px 0", fontSize: "16px", color: "#eab308" }}>Spin the Wheel & Win!</h3>
@@ -493,7 +504,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ⛏️ MINING */}
+        {/* ⛏️ MINING (Shfaq shpejtësinë e saktë 'miningRate' në vend të numrit fiks 20) */}
         {activeTab === "mining" && (
           <div>
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>⛏️ Cloud Mining</h2>
@@ -589,13 +600,13 @@ export default function App() {
           </div>
         )}
 
-        {/* 📋 TASKS (With Direct Share & Join Bot Buttons side-by-side) */}
+        {/* 📋 TASKS */}
         {activeTab === "tasks" && (
           <div>
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>📋 Tasks & Partner Deals</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
 
-              {/* Task 1: Major Bot */}
+              {/* Task 1: Major App */}
               <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", border: "1px solid #334155" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                   <div>
@@ -647,6 +658,32 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Task 3: Official Rewards Bot */}
+              <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", border: "1px solid #334155" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                  <div>
+                    <div style={{ fontWeight: "bold", fontSize: "14px" }}>AdDev Rewards Bot</div>
+                    <div style={{ color: "#94a3b8", fontSize: "11px" }}>Open official Telegram bot</div>
+                    <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+75 ADC</div>
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                  <button
+                    onClick={() => handleDirectShare("AdDev Rewards Bot", "Join AdDev Rewards Bot to earn crypto daily!", OFFICIAL_BOT_LINK)}
+                    style={{ background: "#334155", color: "#fff", border: "1px solid #64748b", padding: "10px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", fontSize: "12px" }}
+                  >
+                    📤 Share
+                  </button>
+                  <button
+                    disabled={completedTasks.includes("official_bot") || taskLoading === "official_bot"}
+                    onClick={() => handleJoinBotTask("official_bot", OFFICIAL_BOT_LINK, 75)}
+                    style={{ background: completedTasks.includes("official_bot") ? "#334155" : "#0284c7", color: "#fff", border: "none", padding: "10px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", fontSize: "12px" }}
+                  >
+                    {completedTasks.includes("official_bot") ? "Done ✅" : taskLoading === "official_bot" ? "Checking..." : "🤖 Open Bot"}
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
         )}
@@ -658,18 +695,43 @@ export default function App() {
             <div style={{ background: "#1e293b", padding: "20px", borderRadius: "16px", textAlign: "center", border: "1px solid #334155", marginBottom: "16px" }}>
               <div style={{ fontSize: "36px", marginBottom: "6px" }}>🎁</div>
               <h3 style={{ margin: "0 0 6px 0", fontSize: "16px" }}>Earn +200 ADC per Friend</h3>
-              <p style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "14px" }}>
+              <p style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "16px" }}>
                 Share your personal link and get rewarded when your friends join!
               </p>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(referralLink);
-                  alert("📋 Invite link copied to clipboard!");
-                }}
-                style={{ width: "100%", padding: "12px", background: "linear-gradient(90deg, #0284c7, #38bdf8)", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", cursor: "pointer", fontSize: "14px" }}
-              >
-                📋 Copy Invite Link
-              </button>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <button
+                  onClick={() => handleDirectShare("AdDev Rewards", "Join AdDev Rewards and earn crypto together!", referralLink)}
+                  style={{ 
+                    padding: "12px 10px", 
+                    background: "#334155", 
+                    color: "#fff", 
+                    border: "1px solid #64748b", 
+                    borderRadius: "10px", 
+                    fontWeight: "bold", 
+                    cursor: "pointer", 
+                    fontSize: "13px" 
+                  }}
+                >
+                  📤 Share Link
+                </button>
+
+                <button
+                  onClick={() => window.open(OFFICIAL_BOT_LINK, "_blank")}
+                  style={{ 
+                    padding: "12px 10px", 
+                    background: "linear-gradient(90deg, #0284c7, #38bdf8)", 
+                    color: "#fff", 
+                    border: "none", 
+                    borderRadius: "10px", 
+                    fontWeight: "bold", 
+                    cursor: "pointer", 
+                    fontSize: "13px" 
+                  }}
+                >
+                  🤖 Join Bot
+                </button>
+              </div>
             </div>
 
             <div style={{ background: "#1e293b", padding: "16px", borderRadius: "16px", border: "1px solid #334155" }}>
