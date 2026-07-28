@@ -11,7 +11,9 @@ export default function App() {
   const [miningLevel, setMiningLevel] = useState<number>(1);
   const [miningRate, setMiningRate] = useState<number>(5);
   const [miningActive, setMiningActive] = useState<boolean>(false);
+  const [miningStartTime, setMiningStartTime] = useState<number | null>(null);
   const [miningEndTime, setMiningEndTime] = useState<number | null>(null);
+  const [currentMined, setCurrentMined] = useState<number>(0);
   const [timeLeftStr, setTimeLeftStr] = useState<string>("");
 
   // Tasks verification states
@@ -26,25 +28,30 @@ export default function App() {
   const BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN || "";
 
   const MONETAG_LINK = "https://omg10.com/4/10168362";
-  const ADMITAD_AFFILIATE_LINK = "https://tatrck.com/h/0Hu30--d0OU9?model=cpa";
   const MAJOR_TELEGRAM_LINK = "https://t.me/major/start?startapp=8508477699";
   const ADDEV_STUDIO_LINK = "https://addev-studio.com";
-  const ADDEV_DEALS_LINK = "https://addev-studio.com/deals";
+  const ADDEV_MINIAPP_LINK = "https://addev-miniapp.vercel.app/";
 
   useEffect(() => {
     initTelegramUser();
   }, []);
 
-  // Countdown timer for Mining
+  // Live Mining & Countdown timer logic (Updates every second)
   useEffect(() => {
     let interval: any = null;
-    if (miningActive && miningEndTime) {
+    if (miningActive && miningEndTime && miningStartTime) {
       interval = setInterval(() => {
         const now = Date.now();
         const diff = miningEndTime - now;
 
+        // Llogarit sa pikë janë gjeneruar deri tani në kohë reale (Live from 0)
+        const elapsedHours = (now - miningStartTime) / (1000 * 60 * 60);
+        const minedSoFar = Math.min(elapsedHours * miningRate, miningRate * 24);
+        setCurrentMined(minedSoFar);
+
         if (diff <= 0) {
           setMiningActive(false);
+          setCurrentMined(miningRate * 24);
           setTimeLeftStr("Ready to Claim!");
           clearInterval(interval);
         } else {
@@ -56,7 +63,7 @@ export default function App() {
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [miningActive, miningEndTime]);
+  }, [miningActive, miningEndTime, miningStartTime, miningRate]);
 
   const initTelegramUser = async () => {
     const tg = (window as any).Telegram?.WebApp;
@@ -80,13 +87,19 @@ export default function App() {
           setMiningLevel(existingUser.mining_level || 1);
           setMiningRate(existingUser.mining_rate || 5);
 
-          if (existingUser.mining_end_time) {
+          if (existingUser.mining_end_time && existingUser.mining_start_time) {
+            const start = new Date(existingUser.mining_start_time).getTime();
             const end = new Date(existingUser.mining_end_time).getTime();
+            setMiningStartTime(start);
             setMiningEndTime(end);
+
             if (end > Date.now()) {
               setMiningActive(true);
+              const elapsedHours = (Date.now() - start) / (1000 * 60 * 60);
+              setCurrentMined(Math.min(elapsedHours * (existingUser.mining_rate || 5), (existingUser.mining_rate || 5) * 24));
             } else {
               setMiningActive(false);
+              setCurrentMined((existingUser.mining_rate || 5) * 24);
               setTimeLeftStr("Ready to Claim!");
             }
           }
@@ -134,30 +147,38 @@ export default function App() {
 
   // Start Mining (24h)
   const handleStartMining = async () => {
-    const endTime = Date.now() + 24 * 60 * 60 * 1000;
+    const startTime = Date.now();
+    const endTime = startTime + 24 * 60 * 60 * 1000;
+    const startIso = new Date(startTime).toISOString();
     const endIso = new Date(endTime).toISOString();
 
-    setMiningActive(true);
+    setMiningStartTime(startTime);
     setMiningEndTime(endTime);
+    setMiningActive(true);
+    setCurrentMined(0);
 
     await saveUserData({
       adc_balance: adcBalance,
+      mining_start_time: startIso,
       mining_end_time: endIso,
     });
   };
 
   // Claim Mining
   const handleClaimMining = async () => {
-    const reward = miningRate * 24; // 5 * 24 = 120 ADC
+    const reward = miningRate * 24; 
     const newBalance = adcBalance + reward;
 
     setAdcBalance(newBalance);
     setMiningActive(false);
+    setMiningStartTime(null);
     setMiningEndTime(null);
+    setCurrentMined(0);
     setTimeLeftStr("");
 
     await saveUserData({
       adc_balance: newBalance,
+      mining_start_time: null,
       mining_end_time: null,
     });
 
@@ -185,8 +206,8 @@ export default function App() {
           title: "Mining Speed Boost (Level 2)",
           description: "Increase mining speed to 10 ADC/hr permanently",
           payload: "mining_boost_level2",
-          currency: "XTR", // Telegram Stars currency
-          prices: [{ label: "Level 2 Boost", amount: 50 }], // 50 Stars
+          currency: "XTR",
+          prices: [{ label: "Level 2 Boost", amount: 50 }],
         }),
       });
 
@@ -256,7 +277,7 @@ export default function App() {
     }, 3000);
   };
 
-  // Complete Tasks with 10s Timer Verification
+  // Complete Tasks with Timer Verification & Official Links
   const handleCompleteTask = (taskId: string, link: string, reward: number) => {
     if (completedTasks.includes(taskId)) {
       alert("You have already completed this task!");
@@ -343,7 +364,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ⛏️ MINING */}
+        {/* ⛏️ MINING (Live Counter & Claim) */}
         {activeTab === "mining" && (
           <div>
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>⛏️ Cloud Mining</h2>
@@ -353,11 +374,19 @@ export default function App() {
                 {miningRate} ADC / hour
               </div>
 
+              {/* Live Mined Counter Display */}
+              <div style={{ margin: "16px 0" }}>
+                <div style={{ fontSize: "12px", color: "#94a3b8" }}>Mined So Far:</div>
+                <div style={{ fontSize: "36px", fontWeight: "bold", color: "#22c55e", margin: "4px 0" }}>
+                  +{currentMined.toFixed(2)} ADC
+                </div>
+              </div>
+
               <div style={{ background: "#0f172a", padding: "14px", borderRadius: "12px", margin: "16px 0", border: "1px solid #1e293b" }}>
                 {miningActive ? (
                   <>
                     <div style={{ fontSize: "12px", color: "#94a3b8" }}>Time Remaining:</div>
-                    <div style={{ fontSize: "20px", fontWeight: "bold", color: "#eab308", marginTop: "4px" }}>{timeLeftStr}</div>
+                    <div style={{ fontSize: "18px", fontWeight: "bold", color: "#eab308", marginTop: "4px" }}>{timeLeftStr}</div>
                   </>
                 ) : miningEndTime && !miningActive ? (
                   <>
@@ -365,7 +394,7 @@ export default function App() {
                     <div style={{ fontSize: "18px", fontWeight: "bold", color: "#22c55e", marginTop: "4px" }}>+{miningRate * 24} ADC Ready</div>
                   </>
                 ) : (
-                  <div style={{ fontSize: "13px", color: "#94a3b8" }}>Mining is inactive. Click below to start 24h free mining!</div>
+                  <div style={{ fontSize: "13px", color: "#94a3b8" }}>Mining is inactive. Click below to start 24h mining!</div>
                 )}
               </div>
 
@@ -377,7 +406,7 @@ export default function App() {
 
               {miningActive && (
                 <button disabled style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "none", background: "#334155", color: "#94a3b8", fontWeight: "bold" }}>
-                  ⏳ Mining in Progress...
+                  ⏳ Mining Live in Progress...
                 </button>
               )}
 
@@ -419,26 +448,11 @@ export default function App() {
           </div>
         )}
 
-        {/* 📋 TASKS */}
+        {/* 📋 TASKS (Me linkat e tua zyrtare) */}
         {activeTab === "tasks" && (
           <div>
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>📋 Tasks & Partner Deals</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-
-              <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontWeight: "bold", fontSize: "14px" }}>Check Special Offers</div>
-                  <div style={{ color: "#94a3b8", fontSize: "11px" }}>Explore Admitad partner offers</div>
-                  <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+100 ADC</div>
-                </div>
-                <button
-                  disabled={completedTasks.includes("admitad") || taskLoading === "admitad"}
-                  onClick={() => handleCompleteTask("admitad", ADMITAD_AFFILIATE_LINK, 100)}
-                  style={{ background: completedTasks.includes("admitad") ? "#334155" : "#0284c7", color: "#fff", border: "none", padding: "8px 14px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}
-                >
-                  {completedTasks.includes("admitad") ? "Done ✅" : taskLoading === "admitad" ? "Verifying..." : "Start"}
-                </button>
-              </div>
 
               <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
@@ -472,16 +486,16 @@ export default function App() {
 
               <div style={{ background: "#1e293b", padding: "14px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontWeight: "bold", fontSize: "14px" }}>Explore AdDev Deals</div>
-                  <div style={{ color: "#94a3b8", fontSize: "11px" }}>Check latest exclusive discounts</div>
+                  <div style={{ fontWeight: "bold", fontSize: "14px" }}>Explore AdDev Mini App</div>
+                  <div style={{ color: "#94a3b8", fontSize: "11px" }}>Check out our main platform version</div>
                   <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: "bold", marginTop: "2px" }}>+50 ADC</div>
                 </div>
                 <button
-                  disabled={completedTasks.includes("deals") || taskLoading === "deals"}
-                  onClick={() => handleCompleteTask("deals", ADDEV_DEALS_LINK, 50)}
-                  style={{ background: completedTasks.includes("deals") ? "#334155" : "#0284c7", color: "#fff", border: "none", padding: "8px 14px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}
+                  disabled={completedTasks.includes("miniapp") || taskLoading === "miniapp"}
+                  onClick={() => handleCompleteTask("miniapp", ADDEV_MINIAPP_LINK, 50)}
+                  style={{ background: completedTasks.includes("miniapp") ? "#334155" : "#0284c7", color: "#fff", border: "none", padding: "8px 14px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}
                 >
-                  {completedTasks.includes("deals") ? "Done ✅" : taskLoading === "deals" ? "Verifying..." : "Start"}
+                  {completedTasks.includes("miniapp") ? "Done ✅" : taskLoading === "miniapp" ? "Verifying..." : "Start"}
                 </button>
               </div>
 
@@ -489,7 +503,7 @@ export default function App() {
           </div>
         )}
 
-        {/* 👥 INVITE */}
+        {/* 👥 FRIENDS / INVITE (Me linkun e saktë të botit të ri) */}
         {activeTab === "invite" && (
           <div>
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>👥 Invite Friends</h2>
@@ -501,7 +515,7 @@ export default function App() {
               </p>
               <button
                 onClick={() => {
-                  const refLink = `https://t.me/${BOT_USERNAME}?start=${user?.id || ""}`;
+                  const refLink = `https://t.me/${BOT_USERNAME}/addev_rewards?startapp=${user?.id || ""}`;
                   navigator.clipboard.writeText(refLink);
                   alert(`Referral link copied: ${refLink}`);
                 }}
