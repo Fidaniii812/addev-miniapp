@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-// Lista e detyrave me linkat e tua zyrtare
+// Detyrat e pastra me linkat e tua zyrtare
 const initialTasks = [
   {
     id: 'task_join_major',
@@ -28,7 +28,7 @@ const initialTasks = [
 export default function Tasks({ userTelegramId, onRewardEarned }) {
   const [completedTasks, setCompletedTasks] = useState([]);
 
-  // Ngarko detyrat e përfunduara më parë nga localStorage
+  // Ngarko detyrat e përfunduara nga localStorage
   useEffect(() => {
     const saved = localStorage.getItem(`completed_tasks_${userTelegramId}`);
     if (saved) {
@@ -40,13 +40,13 @@ export default function Tasks({ userTelegramId, onRewardEarned }) {
     // Hap linkun në një tab të ri
     window.open(task.link, '_blank');
 
-    // Nëse nuk është kryer më parë, ruaje si e përfunduar përgjithmonë
+    // Nëse nuk është kryer më parë, ruaje si e përfunduar
     if (!completedTasks.includes(task.id)) {
       const updated = [...completedTasks, task.id];
       setCompletedTasks(updated);
       localStorage.setItem(`completed_tasks_${userTelegramId}`, JSON.stringify(updated));
       
-      // Shto shpërblimin te bilanci i përdoruesit
+      // Shto shpërblimin te bilanci
       onRewardEarned(task.reward);
     }
   };
