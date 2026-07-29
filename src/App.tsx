@@ -11,7 +11,6 @@ import {
   Loader2
 } from 'lucide-react';
 
-// Define Telegram WebApp global interface safely
 declare global {
   interface Window {
     Telegram?: {
@@ -320,7 +319,7 @@ export default function App() {
         )}
       </main>
 
-      <nav className="absolute bottom-0 left-0 right-0 bg-slate-900/90 backdrop-blur-lg border-t border-slate-800/80 px-4 py-2 flex justify-around items-center z-20">
+      <nav className="absolute bottom-0 left-0 right-0 bg-slate-900/90 backdrop-blur-lg border-t border-slate-800/80 px-4 py-2 flex justify-around items-center z-25">
         {[
           { id: 'home', label: 'Kryesore', icon: Home },
           { id: 'tasks', label: 'Detyrat', icon: CheckSquare },
