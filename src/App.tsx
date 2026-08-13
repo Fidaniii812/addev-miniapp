@@ -1,345 +1,319 @@
-import React, { useEffect,useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  Trophy, 
-  Users, 
-  CheckSquare, 
   Home, 
-  Sparkles, 
+  CheckSquare, 
+  Users, 
+  Trophy, 
   Flame, 
-  ShieldCheck,
-  AlertCircle,
-  Loader2
+  Sparkles, 
+  Share2, 
+  Gift, 
+  Gamepad2, 
+  ShieldCheck, 
+  ExternalLink,
+  Coins
 } from 'lucide-react';
 
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp?: {
-        ready: () => void;
-        expand: () => void;
-        close: () => void;
-        initDataUnsafe?: {
-          user?: {
-            id: number;
-            first_name: string;
-            last_name?: string;
-            username?: string;
-          };
-        };
-        themeParams?: {
-          bg_color?: string;
-          text_color?: string;
-          hint_color?: string;
-          button_color?: string;
-          button_text_color?: string;
-        };
-        isExpanded?: boolean;
-        viewportHeight?: number;
-        setHeaderColor?: (color: string) => void;
-        setBackgroundColor?: (color: string) => void;
-        enableClosingConfirmation?: () => void;
-      };
-    };
-  }
-}
-
-interface UserProfile {
-  id: number;
-  name: string;
-  balance: number;
-  energy: number;
-  maxEnergy: number;
-  streak: number;
-}
-
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'home' | 'tasks' | 'friends' | 'leaderboard'>('home');
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [tapEffect, setTapEffect] = useState<{ id: number; x: number; y: number }[]>([]);
+  const [coins, setCoins] = useState<number>(14250);
+  const [energy, setEnergy] = useState<number>(850);
+  const [maxEnergy] = useState<number>(1000);
+  const [activeTab, setActiveTab] = useState<string>('home');
+  const [dailyStreak, setDailyStreak] = useState<number>(5);
+  const [claimedDaily, setClaimedDaily] = useState<boolean>(false);
+  const [showOfferwallModal, setShowOfferwallModal] = useState<boolean>(false);
 
+  // Energy regeneration simulation
   useEffect(() => {
-    try {
-      const tg = window.Telegram?.WebApp;
-      if (tg) {
-        tg.ready();
-        tg.expand();
-        if (tg.enableClosingConfirmation) {
-          tg.enableClosingConfirmation();
-        }
-
-        const tgUser = tg.initDataUnsafe?.user;
-        setUser({
-          id: tgUser?.id || 1001,
-          name: tgUser?.first_name || 'Kreator',
-          balance: 14250,
-          energy: 850,
-          maxEnergy: 1000,
-          streak: 5,
-        });
-      } else {
-        setUser({
-          id: 1001,
-          name: 'Përdorues Test',
-          balance: 14250,
-          energy: 850,
-          maxEnergy: 1000,
-          streak: 5,
-        });
-      }
-    } catch (err: any) {
-      console.error("Gabim gjatë inicializimit të Telegram WebApp:", err);
-      setError("Nuk u arrit të ngarkohej konteksti i Telegram Mini App.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    const timer = setInterval(() => {
+      setEnergy((prev) => (prev < maxEnergy ? prev + 1 : prev));
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [maxEnergy]);
 
   const handleTap = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!user || user.energy < 10) return;
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    setUser(prev => prev ? {
-      ...prev,
-      balance: prev.balance + 10,
-      energy: Math.max(0, prev.energy - 10)
-    } : null);
-
-    const newTap = { id: Date.now(), x, y };
-    setTapEffect(state => [...state, newTap]);
-
-    setTimeout(() => {
-      setTapEffect(state => state.filter(t => t.id !== newTap.id));
-    }, 800);
+    if (energy > 0) {
+      setCoins(coins + 1);
+      setEnergy(energy - 1);
+      
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      const floatEl = document.createElement('div');
+      floatEl.className = 'absolute text-yellow-400 font-bold text-xl pointer-events-none animate-bounce';
+      floatEl.style.left = `${x}px`;
+      floatEl.style.top = `${y}px`;
+      floatEl.innerText = '+1';
+      e.currentTarget.appendChild(floatEl);
+      
+      setTimeout(() => floatEl.remove(), 800);
+    }
   };
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-white p-4">
-        <Loader2 className="w-10 h-10 animate-spin text-cyan-400 mb-3" />
-        <p className="text-sm font-medium text-slate-400">Duke u ngarkuar Mini App...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-white p-6 text-center">
-        <AlertCircle className="w-12 h-12 text-rose-500 mb-3" />
-        <h2 className="text-lg font-bold mb-1">Ndodhi një gabim</h2>
-        <p className="text-sm text-slate-400 mb-4">{error}</p>
-        <button 
-          onClick={() => window.location.reload()}
-          className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-medium transition-all text-sm"
-        >
-          Provo përsëri
-        </button>
-      </div>
-    );
-  }
+  const handleClaimDaily = () => {
+    if (!claimedDaily) {
+      setCoins(coins + 500);
+      setDailyStreak(dailyStreak + 1);
+      setClaimedDaily(true);
+    }
+  };
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-950 text-slate-100 select-none overflow-hidden font-sans">
-      <header className="flex items-center justify-between px-5 py-4 bg-slate-900/80 backdrop-blur-md border-b border-slate-800/60 sticky top-0 z-20">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-bold text-white shadow-lg shadow-cyan-500/20">
-            {user?.name.charAt(0) || 'K'}
+    <div className="flex flex-col h-screen w-screen max-w-md mx-auto bg-slate-950 text-slate-100 font-sans select-none overflow-hidden relative shadow-2xl border border-slate-800">
+      
+      {/* Background Ambient Glows */}
+      <div className="absolute top-0 left-1/4 w-72 h-72 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute bottom-10 right-1/4 w-72 h-72 bg-purple-600/20 rounded-full blur-3xl pointer-events-none"></div>
+
+      {/* Top Header Section */}
+      <header className="px-5 pt-6 pb-3 flex justify-between items-center z-10">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-lg shadow-lg shadow-indigo-500/30">
+            A
           </div>
           <div>
-            <h1 className="text-sm font-semibold text-slate-200 leading-tight">{user?.name}</h1>
-            <div className="flex items-center gap-1.5 text-xs text-amber-400 font-medium mt-0.5">
-              <Flame className="w-3.5 h-3.5 fill-amber-400" />
-              <span>{user?.streak} Ditë Seri</span>
+            <h1 className="text-lg font-extrabold tracking-wide text-white">AdDev Rewards</h1>
+            <div className="flex items-center space-x-1 text-xs text-indigo-400 font-medium">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Niveli: Pro Gamer</span>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-slate-950/60 px-3 py-1.5 rounded-full border border-slate-800">
-          <Sparkles className="w-4 h-4 text-cyan-400" />
-          <span className="font-bold text-sm tracking-wide text-cyan-300">
-            {user?.balance.toLocaleString()}
-          </span>
+        <div className="flex items-center space-x-2 bg-slate-900/80 border border-slate-800 px-3 py-1.5 rounded-full shadow-inner">
+          <Flame className="w-4 h-4 text-orange-500 animate-pulse" />
+          <span className="text-sm font-bold text-orange-400">{dailyStreak} Ditë Seri</span>
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto pb-24 px-4 pt-4">
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-y-auto px-5 py-2 z-10 pb-24">
+        
+        {/* HOME / TAP TAB */}
         {activeTab === 'home' && (
-          <div className="flex flex-col items-center justify-center py-6">
-            <div className="w-full max-w-xs bg-gradient-to-b from-slate-900 to-slate-900/60 p-5 rounded-3xl border border-slate-800/80 shadow-2xl mb-6 relative overflow-hidden">
-              <div className="absolute -right-6 -top-6 w-24 h-24 bg-cyan-500/10 rounded-full blur-2xl"></div>
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Niveli Aktual</span>
-                <span className="text-xs bg-cyan-500/20 text-cyan-300 px-2.5 py-1 rounded-full font-bold flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5" /> Pro Gamer
+          <div className="flex flex-col items-center justify-center space-y-6 pt-2">
+            
+            {/* Coins Display Card */}
+            <div className="text-center bg-gradient-to-b from-slate-900/90 to-slate-900/50 border border-slate-800/80 backdrop-blur-md rounded-3xl p-6 w-full shadow-xl relative overflow-hidden">
+              <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-yellow-500/10 rounded-full blur-xl"></div>
+              <p className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-1">Balanca Totale</p>
+              <div className="flex items-center justify-center space-x-2">
+                <Coins className="w-8 h-8 text-yellow-400 animate-bounce" />
+                <span className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500">
+                  {coins.toLocaleString()}
                 </span>
               </div>
-              <div className="text-center my-3">
-                <h2 className="text-3xl font-extrabold text-white tracking-tight">
-                  {user?.balance.toLocaleString()} <span className="text-cyan-400 text-lg font-medium">COINS</span>
-                </h2>
-                <p className="text-xs text-slate-400 mt-1">Kliko kartën për të fituar pikë shtesë</p>
-              </div>
+              <p className="text-xs text-slate-400 mt-2">Kliko kartën më poshtë për të fituar pikë shtesë</p>
             </div>
 
+            {/* Tap Button / Play Clicker Card */}
             <div 
               onClick={handleTap}
-              className="relative w-64 h-64 rounded-full bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 flex items-center justify-center cursor-pointer shadow-[0_0_50px_rgba(6,182,212,0.3)] active:scale-95 transition-transform duration-100 border-4 border-slate-900"
+              className="relative w-64 h-64 rounded-full bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-1.5 shadow-2xl shadow-indigo-500/40 cursor-pointer active:scale-95 transition-transform duration-100 flex items-center justify-center group"
             >
-              <div className="absolute inset-2 rounded-full border border-white/20 pointer-events-none"></div>
-              <div className="flex flex-col items-center pointer-events-none">
-                <Trophy className="w-16 h-16 text-white drop-shadow-md mb-2 animate-pulse" />
-                <span className="text-xs uppercase tracking-widest text-cyan-100 font-bold">Kliko Këtu</span>
+              <div className="w-full h-full rounded-full bg-slate-950 flex flex-col items-center justify-center relative overflow-hidden group-hover:bg-slate-900 transition-colors">
+                <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/10 to-transparent pointer-events-none"></div>
+                <Gamepad2 className="w-20 h-20 text-indigo-400 mb-2 group-hover:scale-110 transition-transform duration-300" />
+                <span className="text-lg font-bold text-white tracking-wider">PLAY / TAP</span>
+                <span className="text-xs text-indigo-300 font-medium mt-1">Fito +1 Monedhë</span>
               </div>
-
-              {tapEffect.map(t => (
-                <span
-                  key={t.id}
-                  style={{ left: t.x, top: t.y }}
-                  className="absolute pointer-events-none text-emerald-400 font-black text-xl animate-fade-up"
-                >
-                  +10
-                </span>
-              ))}
             </div>
 
-            <div className="w-full max-w-xs mt-8">
-              <div className="flex justify-between text-xs font-semibold text-slate-400 mb-2">
-                <span className="flex items-center gap-1"><Flame className="w-3.5 h-3.5 text-amber-400" /> Energjia</span>
-                <span className="text-slate-200">{user?.energy} / {user?.maxEnergy}</span>
+            {/* Energy Bar */}
+            <div className="w-full bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-lg">
+              <div className="flex justify-between items-center text-xs font-semibold mb-2">
+                <span className="text-slate-300 flex items-center space-x-1">
+                  <span className="w-2 h-2 rounded-full bg-yellow-400 animate-ping"></span>
+                  <span>Energjia</span>
+                </span>
+                <span className="text-indigo-400 font-mono">{energy} / {maxEnergy}</span>
               </div>
-              <div className="w-full h-3 bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-800">
+              <div className="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-800">
                 <div 
-                  className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all duration-300"
-                  style={{ width: `${((user?.energy || 0) / (user?.maxEnergy || 1000)) * 100}%` }}
+                  className="bg-gradient-to-r from-indigo-500 to-cyan-400 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${(energy / maxEnergy) * 100}%` }}
                 ></div>
               </div>
             </div>
-          </div>
-        )}
 
-        {activeTab === 'tasks' && (
-          <div className="space-y-4 max-w-md mx-auto">
-            <div className="mb-4">
-              <h2 className="text-lg font-bold text-white">Detyrat Ditore</h2>
-              <p className="text-xs text-slate-400">Plotëso detyrat për të fituar shpërblime ekskluzive.</p>
-            </div>
-
-            {[
-              { title: 'Bashkohu në Kanalin Zyrtar', reward: '+5,000 COINS', done: true },
-              { title: 'Fto 3 Miq në Telegram', reward: '+15,000 COINS', done: false },
-              { title: 'Vizito partnerin tonë', reward: '+2,500 COINS', done: false },
-              { title: 'Kryej 100 klikime sot', reward: '+1,000 COINS', done: false },
-            ].map((task, idx) => (
-              <div key={idx} className="flex items-center justify-between p-4 bg-slate-900/60 border border-slate-800 rounded-2xl">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${task.done ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
-                    <CheckSquare className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-slate-200">{task.title}</h3>
-                    <p className="text-xs text-cyan-400 font-medium mt-0.5">{task.reward}</p>
-                  </div>
-                </div>
-                <button 
-                  disabled={task.done}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${task.done ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg shadow-cyan-600/20'}`}
-                >
-                  {task.done ? 'Kryer' : 'Fito'}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {activeTab === 'friends' && (
-          <div className="space-y-4 max-w-md mx-auto text-center py-4">
-            <div className="bg-gradient-to-b from-slate-900 to-slate-900/60 p-6 rounded-3xl border border-slate-800">
-              <Users className="w-12 h-12 text-cyan-400 mx-auto mb-3" />
-              <h2 className="text-lg font-bold text-white mb-1">Fto Miqtë & PërFito</h2>
-              <p className="text-xs text-slate-400 mb-6">Për çdo mik që fton, ju dhe miku juaj fitoni nga 10,000 COINS bonus.</p>
-              
+            {/* Quick Actions Grid (Ads/Rewards, Daily) */}
+            <div className="grid grid-cols-2 gap-3 w-full">
               <button 
-                onClick={() => {
-                  if (window.Telegram?.WebApp) {
-                    const shareUrl = `https://t.me/share/url?url=https://t.me/YourBotName/app?start=ref_${user?.id}&text=${encodeURIComponent('Krijo monedha dhe fito shpërblime në Telegram Mini App!')}`;
-                    window.open(shareUrl, '_blank');
-                  } else {
-                    alert('Linku i referimit u kopjua!');
-                  }
-                }}
-                className="w-full py-3.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-2xl font-bold text-sm shadow-lg shadow-cyan-600/25 transition-all"
+                onClick={() => setShowOfferwallModal(true)}
+                className="flex items-center space-x-3 bg-gradient-to-r from-purple-900/40 to-indigo-900/40 border border-purple-500/30 hover:border-purple-500/60 p-3.5 rounded-2xl transition-all shadow-lg text-left group"
               >
-                Fto Miqtë Tani
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 group-hover:scale-110 transition-transform">
+                  <Gift className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">Ads & Rewards</h4>
+                  <p className="text-[11px] text-purple-300/80">Fito shpërblime</p>
+                </div>
+              </button>
+
+              <button 
+                onClick={handleClaimDaily}
+                disabled={claimedDaily}
+                className={`flex items-center space-x-3 p-3.5 rounded-2xl transition-all shadow-lg text-left border ${claimedDaily ? 'bg-slate-900/40 border-slate-800 opacity-60 cursor-not-allowed' : 'bg-gradient-to-r from-amber-900/40 to-orange-900/40 border-amber-500/30 hover:border-amber-500/60'}`}
+              >
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">Daily Bonus</h4>
+                  <p className="text-[11px] text-amber-300/80">{claimedDaily ? 'Marrë sot ✅' : '+500 Moneda'}</p>
+                </div>
               </button>
             </div>
 
-            <div className="text-left mt-6">
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Miqtë e ftuar (0)</h3>
-              <div className="p-4 bg-slate-900/40 border border-slate-800/80 rounded-2xl text-center text-xs text-slate-500">
-                Ende nuk keni ftuar asnjë mik. Ftoni të parin!
+          </div>
+        )}
+
+        {/* TASKS TAB */}
+        {activeTab === 'tasks' && (
+          <div className="space-y-4 pt-2">
+            <h2 className="text-xl font-bold text-white mb-4">Detyrat & Offerwall</h2>
+            
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex items-center justify-between shadow-lg">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold text-xl">
+                  🎁
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">CPX Research Offerwall</h3>
+                  <p className="text-xs text-slate-400">Plotëso anketa & fito moneda</p>
+                </div>
               </div>
+              <button 
+                onClick={() => setShowOfferwallModal(true)}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition-all flex items-center space-x-1"
+              >
+                <span>Hape</span>
+                <ExternalLink className="w-3.5 h-3.5 ml-1" />
+              </button>
             </div>
           </div>
         )}
 
-        {activeTab === 'leaderboard' && (
-          <div className="space-y-3 max-w-md mx-auto">
-            <div className="mb-4">
-              <h2 className="text-lg font-bold text-white">Renditja Botërore</h2>
-              <p className="text-xs text-slate-400">Lojtarët më të mirë të këtij sezoni.</p>
-            </div>
-
-            {[
-              { rank: 1, name: 'Arben K.', score: '1,420,500' },
-              { rank: 2, name: 'Elona M.', score: '985,200' },
-              { rank: 3, name: 'Besnik G.', score: '750,100' },
-              { rank: 4, name: user?.name || 'Ju', score: user?.balance.toLocaleString() || '14,250', isUser: true },
-              { rank: 5, name: 'Dritan S.', score: '12,000' },
-            ].map((player) => (
-              <div 
-                key={player.rank} 
-                className={`flex items-center justify-between p-3.5 rounded-2xl border ${player.isUser ? 'bg-cyan-950/30 border-cyan-500/40' : 'bg-slate-900/60 border-slate-800'}`}
+        {/* FRIENDS / INVITE & SHARE TAB */}
+        {activeTab === 'friends' && (
+          <div className="space-y-4 pt-2 text-center">
+            <div className="bg-gradient-to-b from-slate-900 to-slate-900/60 border border-slate-800 rounded-3xl p-6 shadow-xl">
+              <div className="w-16 h-16 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 mx-auto mb-4">
+                <Users className="w-8 h-8" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-2">Fto & Shpërndaj Miqtë</h2>
+              <p className="text-xs text-slate-400 mb-6">Fto miqtë e tu përmes linkut dhe fito 1,000 moneda për çdo bashkim!</p>
+              
+              <button 
+                onClick={() => {
+                  if (navigator.share) {
+                    navigator.share({ title: 'AdDev Rewards', url: window.location.href });
+                  } else {
+                    navigator.clipboard.writeText(window.location.href);
+                    alert('Linku u kopjua në clipboard!');
+                  }
+                }}
+                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-3.5 rounded-2xl shadow-lg transition-all flex items-center justify-center space-x-2"
               >
-                <div className="flex items-center gap-3">
-                  <span className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs ${player.rank === 1 ? 'bg-amber-500/20 text-amber-400' : player.rank === 2 ? 'bg-slate-300/20 text-slate-200' : player.rank === 3 ? 'bg-amber-700/20 text-amber-600' : 'bg-slate-800 text-slate-400'}`}>
-                    {player.rank}
+                <Share2 className="w-5 h-5" />
+                <span>Kopjo Linkun / Share</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* RANKING TAB */}
+        {activeTab === 'ranking' && (
+          <div className="space-y-3 pt-2">
+            <h2 className="text-xl font-bold text-white mb-3">Renditja Globale</h2>
+            
+            {[
+              { rank: 1, name: 'Fidan Beciri', coins: '145,200', badge: '👑' },
+              { rank: 2, name: 'Ardit K.', coins: '98,450', badge: '🥈' },
+              { rank: 3, name: 'Blendart S.', coins: '74,100', badge: '🥉' },
+            ].map((user) => (
+              <div key={user.rank} className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between shadow-md">
+                <div className="flex items-center space-x-3">
+                  <span className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center font-bold text-xs text-indigo-400">
+                    {user.badge}
                   </span>
-                  <span className={`text-sm font-semibold ${player.isUser ? 'text-cyan-300 font-bold' : 'text-slate-200'}`}>
-                    {player.name}
-                  </span>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">{user.name}</h4>
+                    <p className="text-[11px] text-slate-400">Niveli Pro</p>
+                  </div>
                 </div>
-                <span className="text-xs font-bold text-cyan-400">{player.score} COINS</span>
+                <div className="text-right">
+                  <span className="text-sm font-extrabold text-yellow-400">{user.coins}</span>
+                  <p className="text-[10px] text-slate-500">Coins</p>
+                </div>
               </div>
             ))}
           </div>
         )}
+
       </main>
 
-      <nav className="absolute bottom-0 left-0 right-0 bg-slate-900/90 backdrop-blur-lg border-t border-slate-800/80 px-4 py-2 flex justify-around items-center z-25">
+      {/* Offerwall Modal */}
+      {showOfferwallModal && (
+        <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex flex-col p-5">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-white flex items-center space-x-2">
+              <Gift className="w-5 h-5 text-purple-400" />
+              <span>CPX Research Offerwall</span>
+            </h3>
+            <button 
+              onClick={() => setShowOfferwallModal(false)}
+              className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-300 hover:bg-slate-700"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="flex-1 bg-slate-900 border border-slate-800 rounded-3xl p-4 flex flex-col items-center justify-center text-center">
+            <div className="w-16 h-16 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center mb-4 text-2xl">
+              📊
+            </div>
+            <h4 className="text-md font-bold text-white mb-2">Anketat dhe Ofertat</h4>
+            <p className="text-xs text-slate-400 mb-6 max-w-xs">
+              Këtu mund të hapni panelin e CPX Research për të fituar shpërblime shtesë.
+            </p>
+            <a 
+              href="https://cpx-research.com" 
+              target="_blank" 
+              rel="noreferrer"
+              className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 px-6 rounded-2xl shadow-lg text-sm flex items-center space-x-2"
+            >
+              <span>Hap Offerwall</span>
+              <ExternalLink className="w-4 h-4 ml-1" />
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom Navigation Bar */}
+      <nav className="absolute bottom-0 left-0 right-0 bg-slate-900/95 border-t border-slate-800/80 backdrop-blur-lg px-3 py-2 z-20 flex justify-around items-center">
         {[
           { id: 'home', label: 'Kryesore', icon: Home },
           { id: 'tasks', label: 'Detyrat', icon: CheckSquare },
           { id: 'friends', label: 'Miqtë', icon: Users },
-          { id: 'leaderboard', label: 'Renditja', icon: Trophy },
+          { id: 'ranking', label: 'Renditja', icon: Trophy },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex flex-col items-center py-1.5 px-3 rounded-2xl transition-all ${isActive ? 'text-cyan-400 scale-105' : 'text-slate-400 hover:text-slate-200'}`}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex flex-col items-center py-1.5 px-3 rounded-2xl transition-all duration-200 ${isActive ? 'text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
             >
-              <Icon className={`w-5 h-5 mb-1 ${isActive ? 'stroke-[2.5px]' : 'stroke-[1.75px]'}`} />
-              <span className="text-[10px] font-semibold tracking-wide">{tab.label}</span>
+              <Icon className={`w-5 h-5 ${isActive ? 'scale-110' : ''} transition-transform`} />
+              <span className="text-[11px] font-semibold mt-1">{tab.label}</span>
             </button>
           );
         })}
       </nav>
+
     </div>
   );
 }
