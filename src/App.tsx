@@ -6,7 +6,6 @@ import {
   Trophy, 
   Flame, 
   Sparkles, 
-  Share2, 
   Gift, 
   Gamepad2, 
   ShieldCheck, 
@@ -30,8 +29,8 @@ export default function App() {
   const [claimedDaily, setClaimedDaily] = useState<boolean>(true);
   const [showOfferwallModal, setShowOfferwallModal] = useState<boolean>(false);
   
-  // Withdraw States
-  const [walletAddress, setWalletAddress] = useState<string>('');
+  // Withdraw & Wallet States
+  const [connectedWallet, setConnectedWallet] = useState<string>('');
   const [withdrawAmount, setWithdrawAmount] = useState<string>('');
   const [isSubmittingWithdraw, setIsSubmittingWithdraw] = useState<boolean>(false);
 
@@ -92,7 +91,7 @@ export default function App() {
           clearInterval(interval);
           setIsWatchingAd(false);
           setCoins(c => c + 250);
-          alert('Congratulations! You earned +250 coins for watching the sponsored video.');
+          alert('Congratulations! You earned +250 AdCoins for watching the sponsored video.');
           return 0;
         }
         return prev - 1;
@@ -100,20 +99,24 @@ export default function App() {
     }, 1000);
   };
 
+  // Connect Telegram Wallet Simulation (TON Connect)
+  const handleConnectWallet = () => {
+    // Simulated successful connection to Telegram Wallet
+    const mockAddress = "EQD4...9xK2 (TON Wallet)";
+    setConnectedWallet(mockAddress);
+    alert('Telegram Wallet connected successfully!');
+  };
+
   // Telegram Stars Purchase Handler
   const handleBuyWithStars = (packageType: string, starCost: number) => {
     const tg = (window as any).Telegram?.WebApp;
-    
-    // Check if running inside Telegram WebApp environment
     if (tg && tg.openInvoice) {
-      // In real backend integration, you create an invoice link via Telegram Bot API first
       alert(`Initiating Telegram Stars payment for ${packageType} (${starCost} Stars)...`);
     } else {
-      // Fallback simulation for browser testing
-      if (confirm(`[Browser Simulation] Do you want to spend ${starCost} Telegram Stars to purchase ${packageType}?`)) {
+      if (confirm(`[Browser Simulation] Spend ${starCost} Telegram Stars to purchase ${packageType}?`)) {
         if (packageType === 'Energy Refill') {
           setEnergy(maxEnergy);
-        } else if (packageType === '5,000 Coins') {
+        } else if (packageType === '5,000 AdCoins') {
           setCoins(c => c + 5000);
         }
         alert('Purchase successful! Items added to your account.');
@@ -125,8 +128,8 @@ export default function App() {
     e.preventDefault();
     const amountNum = Number(withdrawAmount);
 
-    if (!walletAddress.trim()) {
-      alert('Please enter a valid wallet address!');
+    if (!connectedWallet) {
+      alert('Please connect your Telegram Wallet first!');
       return;
     }
     if (isNaN(amountNum) || amountNum <= 0) {
@@ -134,11 +137,11 @@ export default function App() {
       return;
     }
     if (amountNum > coins) {
-      alert('Insufficient balance for this withdrawal!');
+      alert('Insufficient AdCoins balance for this withdrawal!');
       return;
     }
-    if (amountNum < 5000) {
-      alert('Minimum withdrawal amount is 5,000 coins.');
+    if (amountNum < 50000) {
+      alert('Minimum withdrawal amount is 50,000 AdCoins (10€).');
       return;
     }
 
@@ -147,7 +150,7 @@ export default function App() {
       setCoins(prev => prev - amountNum);
       setIsSubmittingWithdraw(false);
       setWithdrawAmount('');
-      alert('Withdrawal request submitted successfully! Processing time: 24h.');
+      alert('Withdrawal request of 10€+ submitted successfully to your Telegram Wallet! Processing time: 24h.');
     }, 1000);
   };
 
@@ -192,13 +195,14 @@ export default function App() {
           <div className="flex flex-col items-center justify-center space-y-5 pt-1">
             <div className="text-center bg-gradient-to-b from-slate-900/90 to-slate-900/50 border border-slate-800/80 backdrop-blur-md rounded-3xl p-5 w-full shadow-xl relative overflow-hidden">
               <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-yellow-500/10 rounded-full blur-xl"></div>
-              <p className="text-[11px] uppercase tracking-widest text-slate-400 font-semibold mb-1">Total Balance</p>
+              <p className="text-[11px] uppercase tracking-widest text-slate-400 font-semibold mb-1">Total AdCoins</p>
               <div className="flex items-center justify-center space-x-2">
                 <Coins className="w-7 h-7 text-yellow-400 animate-bounce" />
                 <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500">
                   {coins.toLocaleString()}
                 </span>
               </div>
+              <p className="text-[10px] text-slate-400 mt-1">Value: ~{((coins / 50000) * 10).toFixed(2)}€ (Rate: 50k = 10€)</p>
             </div>
 
             <div 
@@ -209,7 +213,7 @@ export default function App() {
                 <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/10 to-transparent pointer-events-none"></div>
                 <Gamepad2 className="w-16 h-16 text-indigo-400 mb-2 group-hover:scale-110 transition-transform duration-300" />
                 <span className="text-base font-bold text-white tracking-wider">TAP / PLAY</span>
-                <span className="text-[11px] text-indigo-300 font-medium mt-0.5">+1 Coin</span>
+                <span className="text-[11px] text-indigo-300 font-medium mt-0.5">+1 AdCoin</span>
               </div>
             </div>
 
@@ -239,7 +243,7 @@ export default function App() {
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-white">Ads & Rewards</h4>
-                  <p className="text-[10px] text-purple-300/80">Earn rewards</p>
+                  <p className="text-[10px] text-purple-300/80">Earn AdCoins</p>
                 </div>
               </button>
 
@@ -253,7 +257,7 @@ export default function App() {
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-white">Daily Bonus</h4>
-                  <p className="text-[10px] text-amber-300/80">{claimedDaily ? 'Claimed ✅' : '+500 Coins'}</p>
+                  <p className="text-[10px] text-amber-300/80">{claimedDaily ? 'Claimed ✅' : '+500 AdCoins'}</p>
                 </div>
               </button>
             </div>
@@ -299,10 +303,10 @@ export default function App() {
                   </div>
                 </button>
                 <button 
-                  onClick={() => handleBuyWithStars('5,000 Coins', 100)}
+                  onClick={() => handleBuyWithStars('5,000 AdCoins', 100)}
                   className="bg-slate-900/90 border border-amber-500/20 hover:border-amber-500/50 p-2.5 rounded-xl text-left transition-all"
                 >
-                  <div className="text-xs font-bold text-white mb-0.5">🪙 +5,000 Coins</div>
+                  <div className="text-xs font-bold text-white mb-0.5">🪙 +5,000 AdCoins</div>
                   <div className="text-[11px] text-yellow-400 font-extrabold flex items-center space-x-1">
                     <span>100 Stars</span>
                   </div>
@@ -318,7 +322,7 @@ export default function App() {
                 </div>
                 <div>
                   <h3 className="text-xs font-bold text-white">Watch Sponsored Ad</h3>
-                  <p className="text-[11px] text-slate-400">+250 Coins per ad</p>
+                  <p className="text-[11px] text-slate-400">+250 AdCoins per ad</p>
                 </div>
               </div>
               <button 
@@ -339,27 +343,31 @@ export default function App() {
                 <Wallet className="w-6 h-6" />
               </div>
               <h2 className="text-lg font-bold text-white mb-1">Withdraw Funds</h2>
-              <p className="text-xs text-slate-400 mb-4">Transfer your earnings to your crypto wallet. Min: 5,000 coins.</p>
+              <p className="text-xs text-slate-400 mb-4">Minimum payout: <strong>50,000 AdCoins (10€)</strong>.</p>
+
+              {/* Telegram Wallet Connection Section */}
+              <div className="mb-4 bg-slate-950 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">Telegram Wallet</span>
+                  <span className="text-xs font-bold text-emerald-400">{connectedWallet ? connectedWallet : 'Not Connected'}</span>
+                </div>
+                <button 
+                  type="button"
+                  onClick={handleConnectWallet}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-xl text-xs font-bold shadow transition-all"
+                >
+                  {connectedWallet ? 'Change Wallet' : 'Connect Wallet'}
+                </button>
+              </div>
 
               <form onSubmit={handleWithdraw} className="space-y-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Wallet Address (TON / USDT)</label>
-                  <input 
-                    type="text" 
-                    value={walletAddress}
-                    onChange={(e) => setWalletAddress(e.target.value)}
-                    placeholder="Enter your wallet address..." 
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Amount to Withdraw</label>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Amount to Withdraw (AdCoins)</label>
                   <input 
                     type="number" 
                     value={withdrawAmount}
                     onChange={(e) => setWithdrawAmount(e.target.value)}
-                    placeholder="e.g. 5000" 
+                    placeholder="Min. 50000 (10€)" 
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
                   />
                 </div>
@@ -369,7 +377,7 @@ export default function App() {
                   disabled={isSubmittingWithdraw}
                   className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3 rounded-xl shadow-lg text-xs flex items-center justify-center space-x-2 transition-all mt-2"
                 >
-                  <span>{isSubmittingWithdraw ? 'Processing...' : 'Request Withdrawal'}</span>
+                  <span>{isSubmittingWithdraw ? 'Processing...' : 'Request 10€+ Withdrawal'}</span>
                   <ArrowUpRight className="w-4 h-4" />
                 </button>
               </form>
@@ -384,7 +392,7 @@ export default function App() {
                 <Users className="w-7 h-7" />
               </div>
               <h2 className="text-lg font-bold text-white mb-1.5">Multi-Tier Referrals</h2>
-              <p className="text-xs text-slate-400 mb-5">Earn 1,000 coins for every direct friend + 10% lifetime commission from their activity!</p>
+              <p className="text-xs text-slate-400 mb-5">Earn 1,000 AdCoins for every direct friend + 10% lifetime commission from their activity!</p>
               
               <button 
                 onClick={handleCopyRef}
@@ -401,8 +409,8 @@ export default function App() {
           <div className="space-y-2.5 pt-1">
             <h2 className="text-lg font-bold text-white mb-2">Global Leaderboard</h2>
             {[
-              { rank: 1, name: 'Fidan Beciri', coins: '145,200', badge: '👑' },
-              { rank: 2, name: 'Ardit K.', coins: '98,450', badge: '🥈' },
+              { rank: 1, name: 'Fidan Beciri', coins: '145,200 AdCoins', badge: '👑' },
+              { rank: 2, name: 'Ardit K.', coins: '98,450 AdCoins', badge: '🥈' },
             ].map((user) => (
               <div key={user.rank} className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3 flex items-center justify-between shadow-md">
                 <div className="flex items-center space-x-3">
