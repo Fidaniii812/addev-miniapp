@@ -11,7 +11,13 @@ import {
   Gamepad2, 
   ShieldCheck, 
   ExternalLink,
-  Coins
+  Coins,
+  Wallet,
+  ArrowUpRight,
+  PlaySquare,
+  Copy,
+  CheckCircle2,
+  Star
 } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
@@ -23,6 +29,19 @@ export default function App() {
   const [dailyStreak, setDailyStreak] = useState<number>(6);
   const [claimedDaily, setClaimedDaily] = useState<boolean>(true);
   const [showOfferwallModal, setShowOfferwallModal] = useState<boolean>(false);
+  
+  // Withdraw States
+  const [walletAddress, setWalletAddress] = useState<string>('');
+  const [withdrawAmount, setWithdrawAmount] = useState<string>('');
+  const [isSubmittingWithdraw, setIsSubmittingWithdraw] = useState<boolean>(false);
+
+  // Rewarded Ad Simulation State
+  const [isWatchingAd, setIsWatchingAd] = useState<boolean>(false);
+  const [adCountdown, setAdCountdown] = useState<number>(0);
+
+  // Referral Link State
+  const [copiedRef, setCopiedRef] = useState<boolean>(false);
+  const referralLink = "https://t.me/AdDevRewardsBot?start=ref_" + Math.floor(Math.random() * 1000000);
 
   // CPX Research Offerwall configured with App ID: 34909
   const cpxAppId = "34909";
@@ -62,6 +81,80 @@ export default function App() {
       setDailyStreak(prev => prev + 1);
       setClaimedDaily(true);
     }
+  };
+
+  const handleWatchAd = () => {
+    setIsWatchingAd(true);
+    setAdCountdown(5);
+    const interval = setInterval(() => {
+      setAdCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setIsWatchingAd(false);
+          setCoins(c => c + 250);
+          alert('Congratulations! You earned +250 coins for watching the sponsored video.');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  // Telegram Stars Purchase Handler
+  const handleBuyWithStars = (packageType: string, starCost: number) => {
+    const tg = (window as any).Telegram?.WebApp;
+    
+    // Check if running inside Telegram WebApp environment
+    if (tg && tg.openInvoice) {
+      // In real backend integration, you create an invoice link via Telegram Bot API first
+      alert(`Initiating Telegram Stars payment for ${packageType} (${starCost} Stars)...`);
+    } else {
+      // Fallback simulation for browser testing
+      if (confirm(`[Browser Simulation] Do you want to spend ${starCost} Telegram Stars to purchase ${packageType}?`)) {
+        if (packageType === 'Energy Refill') {
+          setEnergy(maxEnergy);
+        } else if (packageType === '5,000 Coins') {
+          setCoins(c => c + 5000);
+        }
+        alert('Purchase successful! Items added to your account.');
+      }
+    }
+  };
+
+  const handleWithdraw = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amountNum = Number(withdrawAmount);
+
+    if (!walletAddress.trim()) {
+      alert('Please enter a valid wallet address!');
+      return;
+    }
+    if (isNaN(amountNum) || amountNum <= 0) {
+      alert('Please enter a valid amount to withdraw!');
+      return;
+    }
+    if (amountNum > coins) {
+      alert('Insufficient balance for this withdrawal!');
+      return;
+    }
+    if (amountNum < 5000) {
+      alert('Minimum withdrawal amount is 5,000 coins.');
+      return;
+    }
+
+    setIsSubmittingWithdraw(true);
+    setTimeout(() => {
+      setCoins(prev => prev - amountNum);
+      setIsSubmittingWithdraw(false);
+      setWithdrawAmount('');
+      alert('Withdrawal request submitted successfully! Processing time: 24h.');
+    }, 1000);
+  };
+
+  const handleCopyRef = () => {
+    navigator.clipboard.writeText(referralLink);
+    setCopiedRef(true);
+    setTimeout(() => setCopiedRef(false), 2000);
   };
 
   return (
@@ -169,13 +262,15 @@ export default function App() {
 
         {activeTab === 'tasks' && (
           <div className="space-y-3 pt-1">
-            <h2 className="text-lg font-bold text-white mb-3">Tasks & Offerwall</h2>
+            <h2 className="text-lg font-bold text-white mb-3">Tasks & Monetization</h2>
+            
+            {/* CPX Research Offerwall Task */}
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between shadow-lg">
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 font-bold">📊</div>
                 <div>
                   <h3 className="text-xs font-bold text-white">CPX Research Offerwall</h3>
-                  <p className="text-[11px] text-slate-400">Sponsored surveys</p>
+                  <p className="text-[11px] text-slate-400">High paying surveys</p>
                 </div>
               </div>
               <button 
@@ -187,41 +282,116 @@ export default function App() {
               </button>
             </div>
 
+            {/* Telegram Stars Shop Section */}
+            <div className="bg-gradient-to-r from-amber-950/40 to-yellow-950/40 border border-amber-500/30 rounded-2xl p-4 shadow-lg">
+              <div className="flex items-center space-x-2 mb-3">
+                <Star className="w-5 h-5 text-yellow-400 fill-yellow-400 animate-spin" style={{ animationDuration: '6s' }} />
+                <h3 className="text-sm font-bold text-white">Telegram Stars Shop</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                <button 
+                  onClick={() => handleBuyWithStars('Energy Refill', 50)}
+                  className="bg-slate-900/90 border border-amber-500/20 hover:border-amber-500/50 p-2.5 rounded-xl text-left transition-all"
+                >
+                  <div className="text-xs font-bold text-white mb-0.5">⚡ Max Energy</div>
+                  <div className="text-[11px] text-yellow-400 font-extrabold flex items-center space-x-1">
+                    <span>50 Stars</span>
+                  </div>
+                </button>
+                <button 
+                  onClick={() => handleBuyWithStars('5,000 Coins', 100)}
+                  className="bg-slate-900/90 border border-amber-500/20 hover:border-amber-500/50 p-2.5 rounded-xl text-left transition-all"
+                >
+                  <div className="text-xs font-bold text-white mb-0.5">🪙 +5,000 Coins</div>
+                  <div className="text-[11px] text-yellow-400 font-extrabold flex items-center space-x-1">
+                    <span>100 Stars</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Rewarded Ad Task */}
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between shadow-lg">
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold">📢</div>
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold">
+                  <PlaySquare className="w-5 h-5" />
+                </div>
                 <div>
-                  <h3 className="text-xs font-bold text-white">Telegram Channel</h3>
-                  <p className="text-[11px] text-slate-400">+250 Coins</p>
+                  <h3 className="text-xs font-bold text-white">Watch Sponsored Ad</h3>
+                  <p className="text-[11px] text-slate-400">+250 Coins per ad</p>
                 </div>
               </div>
               <button 
-                onClick={() => alert('Channel claimed successfully!')}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-md transition-all"
+                onClick={handleWatchAd}
+                disabled={isWatchingAd}
+                className="bg-cyan-600 hover:bg-cyan-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-md transition-all"
               >
-                Claim
+                {isWatchingAd ? `Wait ${adCountdown}s` : 'Watch'}
               </button>
             </div>
           </div>
         )}
 
-        {activeTab === 'friends' && (
-          <div className="space-y-4 pt-1 text-center">
+        {activeTab === 'withdraw' && (
+          <div className="space-y-4 pt-1">
             <div className="bg-gradient-to-b from-slate-900 to-slate-900/60 border border-slate-800 rounded-3xl p-5 shadow-xl">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-3">
+                <Wallet className="w-6 h-6" />
+              </div>
+              <h2 className="text-lg font-bold text-white mb-1">Withdraw Funds</h2>
+              <p className="text-xs text-slate-400 mb-4">Transfer your earnings to your crypto wallet. Min: 5,000 coins.</p>
+
+              <form onSubmit={handleWithdraw} className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Wallet Address (TON / USDT)</label>
+                  <input 
+                    type="text" 
+                    value={walletAddress}
+                    onChange={(e) => setWalletAddress(e.target.value)}
+                    placeholder="Enter your wallet address..." 
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Amount to Withdraw</label>
+                  <input 
+                    type="number" 
+                    value={withdrawAmount}
+                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                    placeholder="e.g. 5000" 
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
+                </div>
+
+                <button 
+                  type="submit"
+                  disabled={isSubmittingWithdraw}
+                  className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3 rounded-xl shadow-lg text-xs flex items-center justify-center space-x-2 transition-all mt-2"
+                >
+                  <span>{isSubmittingWithdraw ? 'Processing...' : 'Request Withdrawal'}</span>
+                  <ArrowUpRight className="w-4 h-4" />
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'friends' && (
+          <div className="space-y-4 pt-1">
+            <div className="bg-gradient-to-b from-slate-900 to-slate-900/60 border border-slate-800 rounded-3xl p-5 shadow-xl text-center">
               <div className="w-14 h-14 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 mx-auto mb-3">
                 <Users className="w-7 h-7" />
               </div>
-              <h2 className="text-lg font-bold text-white mb-1.5">Invite Friends</h2>
-              <p className="text-xs text-slate-400 mb-5">Earn 1,000 coins for every friend you invite!</p>
+              <h2 className="text-lg font-bold text-white mb-1.5">Multi-Tier Referrals</h2>
+              <p className="text-xs text-slate-400 mb-5">Earn 1,000 coins for every direct friend + 10% lifetime commission from their activity!</p>
+              
               <button 
-                onClick={() => {
-                  navigator.clipboard.writeText(window.location.href);
-                  alert('Invite link copied to clipboard!');
-                }}
-                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold py-3 rounded-2xl shadow-lg text-xs flex items-center justify-center space-x-2"
+                onClick={handleCopyRef}
+                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold py-3 rounded-2xl shadow-lg text-xs flex items-center justify-center space-x-2 transition-transform active:scale-95"
               >
-                <Share2 className="w-4 h-4" />
-                <span>Copy Invite Link</span>
+                {copiedRef ? <CheckCircle2 className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+                <span>{copiedRef ? 'Link Copied Successfully!' : 'Copy Referral Link'}</span>
               </button>
             </div>
           </div>
@@ -283,6 +453,7 @@ export default function App() {
         {[
           { id: 'home', label: 'Home', icon: Home },
           { id: 'tasks', label: 'Tasks', icon: CheckSquare },
+          { id: 'withdraw', label: 'Withdraw', icon: Wallet },
           { id: 'friends', label: 'Friends', icon: Users },
           { id: 'ranking', label: 'Leaderboard', icon: Trophy },
         ].map((tab) => {
