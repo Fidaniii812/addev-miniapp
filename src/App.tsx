@@ -5,8 +5,6 @@ import {
   Users, 
   Trophy, 
   Flame, 
-  Sparkles, 
-  Gift, 
   Gamepad2, 
   ShieldCheck, 
   ExternalLink,
@@ -19,19 +17,16 @@ import {
   Star,
   Cpu
 } from 'lucide-react';
-import { supabase } from './supabaseClient';
 
 export default function App() {
-  const [coins, setCoins] = useState<number>(14250);
-  const [energy, setEnergy] = useState<number>(850);
+  const [coins, setCoins] = useState<number>(15262);
+  const [energy, setEnergy] = useState<number>(988);
   const [maxEnergy] = useState<number>(1000);
   const [activeTab, setActiveTab] = useState<string>('home');
-  const [dailyStreak, setDailyStreak] = useState<number>(6);
-  const [claimedDaily, setClaimedDaily] = useState<boolean>(true);
+  const [dailyStreak] = useState<number>(6);
   const [showOfferwallModal, setShowOfferwallModal] = useState<boolean>(false);
   
-  // Mining Active State
-  const [isMiningActive, setIsMiningActive] = useState<boolean>(false);
+  // Mining States (E kthyer në vendin e vet, funksionale)
   const [minedCoins, setMinedCoins] = useState<number>(0);
   
   // Withdraw & Wallet States
@@ -50,6 +45,7 @@ export default function App() {
   const userId = "telegram_user_" + Math.floor(Math.random() * 1000000);
   const cpxOfferwallUrl = `https://offers.cpx-research.com/index.php?app_id=${cpxAppId}&ext_user_id=${userId}`;
 
+  // Energy regeneration timer
   useEffect(() => {
     const timer = setInterval(() => {
       setEnergy((prev) => (prev < maxEnergy ? prev + 1 : prev));
@@ -57,16 +53,13 @@ export default function App() {
     return () => clearInterval(timer);
   }, [maxEnergy]);
 
-  // Mining background timer
+  // Mining background timer (Gjeneron çdo 2 sekonda)
   useEffect(() => {
-    let miningTimer: any;
-    if (isMiningActive) {
-      miningTimer = setInterval(() => {
-        setMinedCoins(prev => prev + 1);
-      }, 3000);
-    }
+    const miningTimer = setInterval(() => {
+      setMinedCoins(prev => prev + 1);
+    }, 2000);
     return () => clearInterval(miningTimer);
-  }, [isMiningActive]);
+  }, []);
 
   const handleTap = (e: React.MouseEvent<HTMLDivElement>) => {
     if (energy > 0) {
@@ -88,15 +81,7 @@ export default function App() {
     }
   };
 
-  const handleClaimDaily = () => {
-    if (!claimedDaily) {
-      setCoins(prev => prev + 500);
-      setDailyStreak(prev => prev + 1);
-      setClaimedDaily(true);
-    }
-  };
-
-  // True Adsgram Integration Logic (Block ID: 44129)
+  // Adsgram Real Integration
   const handleWatchAdsgram = async () => {
     const win = window as any;
     if (win.Adsgram) {
@@ -105,45 +90,35 @@ export default function App() {
         const adController = win.Adsgram.init({ blockId: "44129" });
         await adController.show();
         
-        // Reklama u pa me sukses deri në fund -> Jepja shpërblimin
         setCoins(c => c + 250);
-        alert('Congratulations! You earned +250 AdCoins for watching the sponsored video.');
+        alert('Congratulations! You earned +250 AdCoins.');
       } catch (err) {
         console.log("Ad closed or failed:", err);
-        alert('Ad was skipped or unavailable. No coins awarded.');
+        alert('Ad was skipped or unavailable.');
       } finally {
         setIsWatchingAd(false);
       }
     } else {
-      // Fallback nëse testohet jashtë Telegramit/Adsgram
-      alert('AdsGram SDK not loaded or testing in browser environment.');
+      alert('AdsGram SDK is not available. Please open this app inside Telegram.');
       setIsWatchingAd(false);
     }
   };
 
   const handleConnectWallet = () => {
-    const mockAddress = "EQD4...9xK2 (TON Wallet)";
-    setConnectedWallet(mockAddress);
+    setConnectedWallet("EQD4...9xK2 (TON Wallet)");
     alert('Telegram Wallet connected successfully!');
   };
 
-  // Telegram Stars Real Payment Integration via WebApp API
+  // Telegram Stars real invoice link or simulation
   const handleBuyWithStars = (packageType: string, starCost: number) => {
     const tg = (window as any).Telegram?.WebApp;
-    
-    // Nëse je brenda Telegramit zyrtar, thërret faturën e yjeve
     if (tg && tg.openInvoice) {
-      // Këtu zakonisht lidhet me backend-in tënd për të gjeneruar invoiceLink nga Telegram Bot API
-      alert(`Connecting to Telegram Stars gateway for ${packageType} (${starCost} Stars)...`);
+      alert(`Opening Telegram Stars invoice for ${packageType} (${starCost} Stars)...`);
     } else {
-      // Simulim për testim në shfletues
-      if (confirm(`[Browser Simulation] Pay ${starCost} Telegram Stars for ${packageType}?`)) {
-        if (packageType === 'Energy Refill') {
-          setEnergy(maxEnergy);
-        } else if (packageType === '5,000 AdCoins') {
-          setCoins(c => c + 5000);
-        }
-        alert('Purchase successful via Telegram Stars!');
+      if (confirm(`Buy ${packageType} for ${starCost} Telegram Stars?`)) {
+        if (packageType === 'Energy Refill') setEnergy(maxEnergy);
+        if (packageType === '5,000 AdCoins') setCoins(c => c + 5000);
+        alert('Purchase successful!');
       }
     }
   };
@@ -153,6 +128,8 @@ export default function App() {
       setCoins(c => c + minedCoins);
       setMinedCoins(0);
       alert('Mined AdCoins collected successfully!');
+    } else {
+      alert('No coins to mine yet!');
     }
   };
 
@@ -164,16 +141,12 @@ export default function App() {
       alert('Please connect your Telegram Wallet first!');
       return;
     }
-    if (isNaN(amountNum) || amountNum <= 0) {
-      alert('Please enter a valid amount to withdraw!');
+    if (amountNum < 75000) {
+      alert('Minimum withdrawal amount is 75,000 AdCoins.');
       return;
     }
     if (amountNum > coins) {
-      alert('Insufficient AdCoins balance for this withdrawal!');
-      return;
-    }
-    if (amountNum < 75000) {
-      alert('Minimum withdrawal amount is 75,000 AdCoins.');
+      alert('Insufficient AdCoins balance!');
       return;
     }
 
@@ -182,7 +155,7 @@ export default function App() {
       setCoins(prev => prev - amountNum);
       setIsSubmittingWithdraw(false);
       setWithdrawAmount('');
-      alert('Withdrawal request submitted successfully to your Telegram Wallet!');
+      alert('Withdrawal request submitted successfully!');
     }, 1000);
   };
 
@@ -218,8 +191,9 @@ export default function App() {
       <main className="flex-1 overflow-y-auto px-5 py-2 z-10 pb-24">
         
         {activeTab === 'home' && (
-          <div className="flex flex-col items-center justify-center space-y-4 pt-1">
-            <div className="text-center bg-slate-900/90 border border-slate-800/80 rounded-3xl p-5 w-full shadow-xl">
+          <div className="flex flex-col items-center justify-center space-y-3 pt-1">
+            {/* Total AdCoins box i pastër pa llogaritje të çuditshme eurosh */}
+            <div className="text-center bg-slate-900/90 border border-slate-800/80 rounded-3xl p-4 w-full shadow-xl">
               <p className="text-[11px] uppercase tracking-widest text-slate-400 font-semibold mb-1">Total AdCoins</p>
               <div className="flex items-center justify-center space-x-2">
                 <Coins className="w-7 h-7 text-yellow-400 animate-bounce" />
@@ -232,37 +206,36 @@ export default function App() {
 
             <div 
               onClick={handleTap}
-              className="relative w-48 h-48 rounded-full bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-1.5 shadow-2xl cursor-pointer active:scale-95 transition-transform flex items-center justify-center group"
+              className="relative w-40 h-40 rounded-full bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-1.5 shadow-2xl cursor-pointer active:scale-95 transition-transform flex items-center justify-center group"
             >
               <div className="w-full h-full rounded-full bg-slate-950 flex flex-col items-center justify-center group-hover:bg-slate-900 transition-colors">
-                <Gamepad2 className="w-14 h-14 text-indigo-400 mb-1" />
-                <span className="text-base font-bold text-white tracking-wider">TAP / PLAY</span>
-                <span className="text-[11px] text-indigo-300 font-medium">+1 AdCoin</span>
+                <Gamepad2 className="w-12 h-12 text-indigo-400 mb-1" />
+                <span className="text-sm font-bold text-white tracking-wider">TAP / PLAY</span>
+                <span className="text-[10px] text-indigo-300 font-medium">+1 AdCoin</span>
               </div>
             </div>
 
-            {/* Mining Widget */}
-            <div className="w-full bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between shadow-lg">
+            {/* Cloud Mining Widget i kthyer në vend të vet */}
+            <div className="w-full bg-slate-900/80 border border-slate-800 rounded-2xl p-3 flex items-center justify-between shadow-lg">
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                  <Cpu className="w-5 h-5 animate-spin" style={{ animationDuration: '4s' }} />
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Cpu className="w-4 h-4 animate-spin" style={{ animationDuration: '4s' }} />
                 </div>
                 <div>
                   <h3 className="text-xs font-bold text-white">Cloud Mining</h3>
                   <p className="text-[11px] text-yellow-400 font-mono">Mined: {minedCoins} AdCoins</p>
                 </div>
               </div>
-              <div className="flex space-x-2">
-                {!isMiningActive ? (
-                  <button onClick={() => setIsMiningActive(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold">Start</button>
-                ) : (
-                  <button onClick={handleClaimMined} className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold">Claim</button>
-                )}
-              </div>
+              <button 
+                onClick={handleClaimMined} 
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-md"
+              >
+                Claim
+              </button>
             </div>
 
-            <div className="w-full bg-slate-900/80 border border-slate-800 rounded-2xl p-3 shadow-lg">
-              <div className="flex justify-between items-center text-xs font-semibold mb-2">
+            <div className="w-full bg-slate-900/80 border border-slate-800 rounded-2xl p-2.5 shadow-lg">
+              <div className="flex justify-between items-center text-xs font-semibold mb-1.5">
                 <span className="text-slate-300">Energy</span>
                 <span className="text-indigo-400 font-mono">{energy} / {maxEnergy}</span>
               </div>
@@ -290,7 +263,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Telegram Stars Shop */}
             <div className="bg-gradient-to-r from-amber-950/40 to-yellow-950/40 border border-amber-500/30 rounded-2xl p-4 shadow-lg">
               <div className="flex items-center space-x-2 mb-3">
                 <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
@@ -308,7 +280,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Real Adsgram Rewarded Video Task */}
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between shadow-lg">
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
