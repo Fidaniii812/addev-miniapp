@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import {
   Home,
   CheckSquare,
@@ -16,12 +22,115 @@ import {
   CheckCircle2,
   Star,
   Cpu,
-  Zap,
-  X,
-  RefreshCw,
   Gift,
-  BarChart3,
+  History,
+  Loader2,
+  X,
 } from "lucide-react";
+
+import { createClient } from "@supabase/supabase-js";
+
+/*
+===========================================================
+                 ADDDEV REWARDS
+                 Telegram Mini App
+===========================================================
+
+This App.tsx is prepared for:
+
+1. Telegram Mini App
+2. Supabase
+3. Telegram Stars
+4. CPX Research
+5. Adsgram
+6. Referral system
+7. Cloud mining
+8. Withdrawals
+9. Leaderboard
+10. Transaction history
+
+IMPORTANT:
+
+Telegram Stars:
+The frontend DOES NOT create fake invoices.
+
+It calls a Supabase Edge Function:
+
+create-stars-invoice
+
+The backend must create the real Telegram Stars invoice.
+
+Recommended Supabase tables:
+
+profiles
+transactions
+withdrawals
+referrals
+
+Recommended RPC/functions:
+
+tap_adcoin
+claim_mining
+apply_referral
+
+===========================================================
+*/
+
+
+/* =========================================================
+   TYPES
+========================================================= */
+
+type Tab =
+  | "home"
+  | "tasks"
+  | "withdraw"
+  | "friends"
+  | "ranking";
+
+type NoticeType =
+  | "success"
+  | "error"
+  | "info";
+
+type Notice = {
+  title: string;
+  message: string;
+  type: NoticeType;
+};
+
+type Profile = {
+  telegram_id: number;
+  first_name?: string | null;
+  username?: string | null;
+
+  coins: number;
+  energy: number;
+  mined_coins: number;
+
+  streak: number;
+
+  wallet_address: string | null;
+
+  referral_code: string | null;
+  referred_by: number | null;
+};
+
+type Withdrawal = {
+  id: string;
+  amount: number;
+  wallet_address: string;
+  status: string;
+  created_at: string;
+};
+
+type LeaderboardUser = {
+  telegram_id: number;
+  username?: string | null;
+  first_name?: string | null;
+  coins: number;
+};
+
 
 /* =========================================================
    TELEGRAM TYPES
@@ -31,42 +140,33 @@ declare global {
   interface Window {
     Telegram?: {
       WebApp?: {
-        initData?: string;
-        initDataUnsafe?: {
-          user?: {
-            id?: number;
-            first_name?: string;
-            last_name?: string;
-            username?: string;
-            language_code?: string;
-          };
-          start_param?: string;
-        };
         ready?: () => void;
         expand?: () => void;
-        disableVerticalSwipes?: () => void;
-        openLink?: (url: string) => void;
-        openTelegramLink?: (url: string) => void;
+        close?: () => void;
+
         openInvoice?: (
           url: string,
           callback?: (status: string) => void
         ) => void;
-        showPopup?: (
-          params: {
-            title?: string;
-            message: string;
-            buttons?: Array<{
-              id: string;
-              type?: string;
-              text?: string;
-            }>;
-          },
-          callback?: (id: string) => void
-        ) => void;
+
+        initData?: string;
+
+        initDataUnsafe?: {
+          user?: {
+            id: number;
+            first_name?: string;
+            last_name?: string;
+            username?: string;
+          };
+
+          start_param?: string;
+        };
+
         HapticFeedback?: {
           impactOccurred?: (
-            style: "light" | "medium" | "heavy" | "rigid" | "soft"
+            style: "light" | "medium" | "heavy"
           ) => void;
+
           notificationOccurred?: (
             type: "error" | "success" | "warning"
           ) => void;
@@ -75,652 +175,1588 @@ declare global {
     };
 
     Adsgram?: {
-      init: (config: {
-        blockId: string;
-        debug?: boolean;
-      }) => {
-        show: () => Promise<void>;
+      init: (
+        config: {
+          blockId: string;
+        }
+      ) => {
+        show: () => Promise<unknown>;
       };
     };
   }
 }
 
+
 /* =========================================================
-   CONSTANTS
+   CONFIGURATION
 ========================================================= */
 
-const APP_NAME = "AdDev Rewards";
+const SUPABASE_URL =
+  import.meta.env.VITE_SUPABASE_URL as string | undefined;
 
-const ADSGRAM_BLOCK_ID = "44129";
+const SUPABASE_ANON_KEY =
+  import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-const CPX_APP_ID = "34909";
 
-const MIN_WITHDRAW = 75000;
+/*
+   Supabase is optional during initial UI testing.
 
-const MAX_ENERGY = 1000;
+   Once VITE variables are added,
+   the app automatically connects.
+*/
 
-const ENERGY_REGEN_MS = 1500;
+const supabase =
+  SUPABASE_URL && SUPABASE_ANON_KEY
+    ? createClient(
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY
+      )
+    : null;
 
-const MINING_INTERVAL_MS = 2000;
-
-const TAP_REWARD = 1;
-
-const AD_REWARD = 250;
-
-const REFERRAL_REWARD = 1000;
 
 /* =========================================================
-   STORAGE
+   APP CONFIG
 ========================================================= */
 
-const STORAGE_KEYS = {
-  coins: "addev_coins",
-  energy: "addev_energy",
-  minedCoins: "addev_mined_coins",
-  streak: "addev_streak",
-  wallet: "addev_wallet",
-  lastOpen: "addev_last_open",
-};
+const BOT_USERNAME =
+  "AdDevRewardsBot";
+
+const ADSGRAM_BLOCK_ID =
+  "44129";
+
+const CPX_APP_ID =
+  "34909";
+
+const MAX_ENERGY =
+  1000;
+
+const MIN_WITHDRAWAL =
+  75000;
+
+
+/*
+   IMPORTANT:
+
+   These are only frontend identifiers.
+
+   Real Stars invoices MUST be generated
+   by Supabase Edge Function.
+*/
+
+const STARS_FUNCTION =
+  "create-stars-invoice";
+
 
 /* =========================================================
-   HELPERS
-========================================================= */
-
-function readNumber(key: string, fallback: number): number {
-  try {
-    const value = localStorage.getItem(key);
-
-    if (value === null) {
-      return fallback;
-    }
-
-    const parsed = Number(value);
-
-    return Number.isFinite(parsed) ? parsed : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function readString(key: string, fallback = ""): string {
-  try {
-    return localStorage.getItem(key) || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function saveValue(key: string, value: string | number) {
-  try {
-    localStorage.setItem(key, String(value));
-  } catch {
-    // Ignore storage errors.
-  }
-}
-
-/* =========================================================
-   TELEGRAM USER
+   TELEGRAM HELPERS
 ========================================================= */
 
 function getTelegramUser() {
-  return window.Telegram?.WebApp?.initDataUnsafe?.user;
+  return (
+    window.Telegram?.WebApp?.initDataUnsafe?.user ||
+    null
+  );
 }
 
-function getTelegramUserId(): string {
-  const telegramId = getTelegramUser()?.id;
 
-  if (telegramId) {
-    return String(telegramId);
+function getTelegramUserId(): number | null {
+  return (
+    window.Telegram?.WebApp?.initDataUnsafe?.user?.id ??
+    null
+  );
+}
+
+
+function getStartParam(): string | null {
+  return (
+    window.Telegram?.WebApp?.initDataUnsafe?.start_param ??
+    null
+  );
+}
+
+
+/* =========================================================
+   FORMATTERS
+========================================================= */
+
+function formatCoins(
+  value: number
+) {
+  return Math.max(
+    0,
+    Math.floor(value)
+  ).toLocaleString();
+}
+
+
+function formatDate(
+  value: string
+) {
+  try {
+    return new Date(value).toLocaleDateString();
+  } catch {
+    return value;
   }
-
-  /*
-   * Development fallback only.
-   * This is NOT a random ID.
-   */
-  return "demo_user";
 }
+
 
 /* =========================================================
    MAIN APP
 ========================================================= */
 
 export default function App() {
-  /* -------------------------------------------------------
-     Telegram
-  ------------------------------------------------------- */
-
-  const telegramUser = getTelegramUser();
-
-  const telegramUserId = getTelegramUserId();
-
-  const telegramUsername =
-    telegramUser?.username ||
-    telegramUser?.first_name ||
-    "Telegram User";
 
   /* -------------------------------------------------------
-     Main state
-  ------------------------------------------------------- */
-
-  const [coins, setCoins] = useState<number>(() =>
-    readNumber(STORAGE_KEYS.coins, 15432)
-  );
-
-  const [energy, setEnergy] = useState<number>(() =>
-    readNumber(STORAGE_KEYS.energy, MAX_ENERGY)
-  );
-
-  const [minedCoins, setMinedCoins] = useState<number>(() =>
-    readNumber(STORAGE_KEYS.minedCoins, 0)
-  );
-
-  const [dailyStreak] = useState<number>(() =>
-    readNumber(STORAGE_KEYS.streak, 6)
-  );
-
-  const [connectedWallet, setConnectedWallet] = useState<string>(() =>
-    readString(STORAGE_KEYS.wallet, "")
-  );
-
-  const [activeTab, setActiveTab] = useState<string>("home");
-
-  const [showOfferwallModal, setShowOfferwallModal] =
-    useState<boolean>(false);
-
-  const [isWatchingAd, setIsWatchingAd] =
-    useState<boolean>(false);
-
-  const [isConnectingWallet, setIsConnectingWallet] =
-    useState<boolean>(false);
-
-  const [withdrawAmount, setWithdrawAmount] =
-    useState<string>("");
-
-  const [isSubmittingWithdraw, setIsSubmittingWithdraw] =
-    useState<boolean>(false);
-
-  const [copiedRef, setCopiedRef] =
-    useState<boolean>(false);
-
-  const [tapAnimation, setTapAnimation] =
-    useState<number>(0);
-
-  /* -------------------------------------------------------
-     Stable referral link
-  ------------------------------------------------------- */
-
-  const referralLink = useMemo(() => {
-    return `https://t.me/AdDevRewardsBot?start=ref_${telegramUserId}`;
-  }, [telegramUserId]);
-
-  /* -------------------------------------------------------
-     CPX Offerwall URL
-  ------------------------------------------------------- */
-
-  const cpxOfferwallUrl = useMemo(() => {
-    return (
-      `https://offers.cpx-research.com/index.php` +
-      `?app_id=${encodeURIComponent(CPX_APP_ID)}` +
-      `&ext_user_id=${encodeURIComponent(telegramUserId)}`
-    );
-  }, [telegramUserId]);
-
-  /* =======================================================
      TELEGRAM INITIALIZATION
-  ======================================================= */
+  ------------------------------------------------------- */
 
   useEffect(() => {
-    const tg = window.Telegram?.WebApp;
 
-    if (!tg) {
-      return;
-    }
+    const tg =
+      window.Telegram?.WebApp;
 
-    try {
-      tg.ready?.();
-      tg.expand?.();
-      tg.disableVerticalSwipes?.();
-    } catch (error) {
-      console.log("Telegram WebApp initialization error:", error);
-    }
+    if (!tg) return;
+
+    tg.ready?.();
+    tg.expand?.();
+
   }, []);
 
+
+  /* -------------------------------------------------------
+     STATE
+  ------------------------------------------------------- */
+
+  const [activeTab, setActiveTab] =
+    useState<Tab>("home");
+
+  const [profile, setProfile] =
+    useState<Profile | null>(null);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [actionLoading, setActionLoading] =
+    useState(false);
+
+  const [isWatchingAd, setIsWatchingAd] =
+    useState(false);
+
+  const [showOfferwall, setShowOfferwall] =
+    useState(false);
+
+  const [showHistory, setShowHistory] =
+    useState(false);
+
+  const [notice, setNotice] =
+    useState<Notice | null>(null);
+
+  const [withdrawAmount, setWithdrawAmount] =
+    useState("");
+
+  const [withdrawals, setWithdrawals] =
+    useState<Withdrawal[]>([]);
+
+  const [leaderboard, setLeaderboard] =
+    useState<LeaderboardUser[]>([]);
+
+  const [copiedRef, setCopiedRef] =
+    useState(false);
+
+  /*
+     Local mining timer.
+
+     Later this should be moved completely
+     to Supabase/server logic.
+  */
+
+  const [localMining, setLocalMining] =
+    useState(0);
+
+
+  /* -------------------------------------------------------
+     TELEGRAM USER
+  ------------------------------------------------------- */
+
+  const telegramUser =
+    getTelegramUser();
+
+  const telegramUserId =
+    getTelegramUserId();
+
+  const userId =
+    telegramUserId ?? 0;
+
+
+  /* -------------------------------------------------------
+     REFERRAL
+  ------------------------------------------------------- */
+
+  const referralCode =
+    useMemo(() => {
+
+      if (!userId)
+        return "";
+
+      return `ref_${userId}`;
+
+    }, [userId]);
+
+
+  /*
+     Telegram Mini App referral:
+
+     https://t.me/AdDevRewardsBot?startapp=ref_123456
+
+  */
+
+  const referralLink =
+    useMemo(() => {
+
+      if (!userId)
+        return "";
+
+      return `https://t.me/${BOT_USERNAME}?startapp=${referralCode}`;
+
+    }, [
+      userId,
+      referralCode,
+    ]);
+
+
+  /* -------------------------------------------------------
+     CPX OFFERWALL
+  ------------------------------------------------------- */
+
+  const cpxUserId =
+    userId
+      ? String(userId)
+      : "demo_user";
+
+
+  const cpxOfferwallUrl =
+    `https://offers.cpx-research.com/index.php?app_id=${CPX_APP_ID}&ext_user_id=${encodeURIComponent(
+      cpxUserId
+    )}`;
+
+
   /* =======================================================
-     SAVE COINS
+     NOTIFICATIONS
   ======================================================= */
 
-  useEffect(() => {
-    saveValue(STORAGE_KEYS.coins, coins);
-  }, [coins]);
+  const showNotice =
+    useCallback(
+      (
+        title: string,
+        message: string,
+        type: NoticeType = "info"
+      ) => {
+
+        setNotice({
+          title,
+          message,
+          type,
+        });
+
+      },
+      []
+    );
+
+
+  const haptic =
+    useCallback(
+      (
+        style:
+          | "light"
+          | "medium"
+          | "heavy" = "light"
+      ) => {
+
+        window.Telegram?.WebApp
+          ?.HapticFeedback
+          ?.impactOccurred?.(
+            style
+          );
+
+      },
+      []
+    );
+
 
   /* =======================================================
-     SAVE ENERGY
+     LOAD PROFILE
   ======================================================= */
 
+  const loadProfile =
+    useCallback(async () => {
+
+      /*
+         If Supabase isn't connected,
+         use demo profile.
+
+         This lets us test the UI first.
+      */
+
+      if (!supabase || !userId) {
+
+        setProfile({
+
+          telegram_id:
+            userId || 123456789,
+
+          first_name:
+            telegramUser?.first_name ||
+            "Fidan",
+
+          username:
+            telegramUser?.username ||
+            null,
+
+          coins:
+            15262,
+
+          energy:
+            988,
+
+          mined_coins:
+            0,
+
+          streak:
+            6,
+
+          wallet_address:
+            null,
+
+          referral_code:
+            referralCode,
+
+          referred_by:
+            null,
+
+        });
+
+        setLoading(false);
+
+        return;
+      }
+
+
+      try {
+
+        const {
+          data,
+          error,
+        } = await supabase
+          .from("profiles")
+          .select(`
+            telegram_id,
+            first_name,
+            username,
+            coins,
+            energy,
+            mined_coins,
+            streak,
+            wallet_address,
+            referral_code,
+            referred_by
+          `)
+          .eq(
+            "telegram_id",
+            userId
+          )
+          .maybeSingle();
+
+
+        if (error)
+          throw error;
+
+
+        /*
+           Create profile if user doesn't exist.
+        */
+
+        if (!data) {
+
+          const newProfile = {
+
+            telegram_id:
+              userId,
+
+            first_name:
+              telegramUser?.first_name ||
+              null,
+
+            username:
+              telegramUser?.username ||
+              null,
+
+            coins:
+              0,
+
+            energy:
+              MAX_ENERGY,
+
+            mined_coins:
+              0,
+
+            streak:
+              1,
+
+            wallet_address:
+              null,
+
+            referral_code:
+              referralCode,
+
+            referred_by:
+              null,
+
+          };
+
+
+          const {
+            data: created,
+            error: createError,
+          } =
+            await supabase
+              .from("profiles")
+              .insert(newProfile)
+              .select()
+              .single();
+
+
+          if (createError)
+            throw createError;
+
+
+          setProfile(created);
+
+        } else {
+
+          setProfile(data);
+
+        }
+
+      } catch (error) {
+
+        console.error(
+          "Profile error:",
+          error
+        );
+
+        showNotice(
+          "Supabase",
+          "Nuk mund të ngarkohej profili.",
+          "error"
+        );
+
+      } finally {
+
+        setLoading(false);
+
+      }
+
+    }, [
+      userId,
+      referralCode,
+      telegramUser,
+      showNotice,
+    ]);
+
+
   useEffect(() => {
-    saveValue(STORAGE_KEYS.energy, energy);
-  }, [energy]);
 
-  /* =======================================================
-     SAVE MINING
-  ======================================================= */
+    loadProfile();
 
-  useEffect(() => {
-    saveValue(STORAGE_KEYS.minedCoins, minedCoins);
-  }, [minedCoins]);
+  }, [loadProfile]);
 
-  /* =======================================================
-     SAVE WALLET
-  ======================================================= */
-
-  useEffect(() => {
-    saveValue(STORAGE_KEYS.wallet, connectedWallet);
-  }, [connectedWallet]);
 
   /* =======================================================
      ENERGY REGENERATION
   ======================================================= */
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setEnergy((previous) => {
-        if (previous >= MAX_ENERGY) {
-          return MAX_ENERGY;
-        }
 
-        return Math.min(previous + 1, MAX_ENERGY);
-      });
-    }, ENERGY_REGEN_MS);
+    const timer =
+      setInterval(() => {
 
-    return () => {
-      window.clearInterval(timer);
-    };
+        setProfile(
+          previous => {
+
+            if (!previous)
+              return previous;
+
+            if (
+              previous.energy >=
+              MAX_ENERGY
+            )
+              return previous;
+
+            return {
+              ...previous,
+              energy:
+                previous.energy + 1,
+            };
+
+          }
+        );
+
+      }, 1500);
+
+
+    return () =>
+      clearInterval(timer);
+
   }, []);
 
+
   /* =======================================================
-     CLOUD MINING
+     LOCAL MINING DISPLAY
   ======================================================= */
 
   useEffect(() => {
-    const miningTimer = window.setInterval(() => {
-      setMinedCoins((previous) => previous + 1);
-    }, MINING_INTERVAL_MS);
 
-    return () => {
-      window.clearInterval(miningTimer);
-    };
+    const timer =
+      setInterval(() => {
+
+        setLocalMining(
+          previous =>
+            previous + 1
+        );
+
+      }, 2000);
+
+
+    return () =>
+      clearInterval(timer);
+
   }, []);
 
-  /* =======================================================
-     HAPTIC
-  ======================================================= */
-
-  const haptic = (
-    type: "light" | "medium" | "heavy" = "light"
-  ) => {
-    try {
-      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(
-        type
-      );
-    } catch {
-      // Ignore haptic errors.
-    }
-  };
 
   /* =======================================================
      TAP / PLAY
   ======================================================= */
 
-  const handleTap = (
-    event: React.MouseEvent<HTMLDivElement>
-  ) => {
-    if (energy <= 0) {
-      haptic("heavy");
-      return;
-    }
+  const handleTap =
+    async () => {
 
-    setCoins((previous) => previous + TAP_REWARD);
+      if (!profile)
+        return;
 
-    setEnergy((previous) =>
-      Math.max(previous - 1, 0)
-    );
 
-    setTapAnimation((previous) => previous + 1);
+      if (profile.energy <= 0) {
 
-    haptic("light");
-
-    const target = event.currentTarget;
-
-    const rect = target.getBoundingClientRect();
-
-    const x = event.clientX - rect.left;
-
-    const y = event.clientY - rect.top;
-
-    const floatingElement =
-      document.createElement("div");
-
-    floatingElement.className =
-      "absolute text-yellow-400 font-extrabold text-lg pointer-events-none z-30";
-
-    floatingElement.style.left = `${x}px`;
-
-    floatingElement.style.top = `${y}px`;
-
-    floatingElement.style.transform =
-      "translate(-50%, -50%)";
-
-    floatingElement.style.transition =
-      "all 700ms ease-out";
-
-    floatingElement.innerText = "+1";
-
-    target.appendChild(floatingElement);
-
-    requestAnimationFrame(() => {
-      floatingElement.style.transform =
-        "translate(-50%, -100px)";
-
-      floatingElement.style.opacity = "0";
-    });
-
-    window.setTimeout(() => {
-      floatingElement.remove();
-    }, 750);
-  };
-
-  /* =======================================================
-     ADSGRAM
-  ======================================================= */
-
-  const handleWatchAdsgram = async () => {
-    if (isWatchingAd) {
-      return;
-    }
-
-    const adsgram = window.Adsgram;
-
-    if (!adsgram) {
-      alert(
-        "Adsgram is not available. Please open AdDev Rewards inside Telegram."
-      );
-
-      return;
-    }
-
-    setIsWatchingAd(true);
-
-    haptic("medium");
-
-    try {
-      const controller = adsgram.init({
-        blockId: ADSGRAM_BLOCK_ID,
-        debug: false,
-      });
-
-      await controller.show();
-
-      /*
-       * IMPORTANT:
-       * For a production rewards system this reward
-       * should be verified by the backend.
-       *
-       * This frontend reward is only the current
-       * client-side implementation.
-       */
-
-      setCoins((previous) =>
-        previous + AD_REWARD
-      );
-
-      try {
-        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.(
-          "success"
+        showNotice(
+          "Energy",
+          "Nuk ke më energji. Përdor Energy Refill.",
+          "info"
         );
-      } catch {
-        // Ignore.
+
+        return;
       }
 
-      alert(
-        `Congratulations! +${AD_REWARD} AdCoins`
-      );
-    } catch (error) {
-      console.log(
-        "Adsgram ad failed or was closed:",
-        error
-      );
 
-      alert(
-        "The ad was skipped, closed, or is currently unavailable."
-      );
-    } finally {
-      setIsWatchingAd(false);
-    }
-  };
+      haptic("light");
+
+
+      /*
+         Local update for immediate UI.
+
+         Later this should use a secure
+         Supabase RPC:
+
+         tap_adcoin
+      */
+
+      setProfile({
+        ...profile,
+
+        coins:
+          profile.coins + 1,
+
+        energy:
+          profile.energy - 1,
+      });
+
+
+      /*
+         If Supabase is connected,
+         try secure RPC.
+      */
+
+      if (supabase && userId) {
+
+        const {
+          error,
+        } = await supabase.rpc(
+          "tap_adcoin",
+          {
+            p_telegram_id:
+              userId,
+          }
+        );
+
+
+        if (error) {
+
+          console.warn(
+            "tap_adcoin RPC not available:",
+            error.message
+          );
+
+        }
+
+      }
+
+    };
+
 
   /* =======================================================
      CLAIM MINING
   ======================================================= */
 
-  const handleClaimMined = () => {
-    if (minedCoins <= 0) {
-      alert("No mined AdCoins available yet.");
-      return;
-    }
+  const handleClaimMining =
+    async () => {
 
-    const amount = minedCoins;
+      if (!profile)
+        return;
 
-    setCoins((previous) =>
-      previous + amount
-    );
 
-    setMinedCoins(0);
+      if (localMining <= 0) {
 
-    haptic("medium");
+        showNotice(
+          "Cloud Mining",
+          "Nuk ka ende AdCoins për të marrë.",
+          "info"
+        );
 
-    alert(
-      `You collected ${amount.toLocaleString()} mined AdCoins.`
-    );
-  };
+        return;
+      }
 
-  /* =======================================================
-     WALLET
-  ======================================================= */
-
-  const handleConnectWallet = async () => {
-    if (connectedWallet) {
-      return;
-    }
-
-    setIsConnectingWallet(true);
-
-    haptic("medium");
-
-    /*
-     * NOTE:
-     * This is still a UI/demo connection.
-     *
-     * Real TON Wallet connection should be added
-     * through the official Telegram/TonConnect flow
-     * and verified server-side.
-     */
-
-    window.setTimeout(() => {
-      const demoWallet = "EQD4...9xK2";
-
-      setConnectedWallet(demoWallet);
-
-      setIsConnectingWallet(false);
-
-      alert(
-        "Wallet connection prepared. Real TON verification requires backend integration."
-      );
-    }, 700);
-  };
-
-  /* =======================================================
-     WITHDRAW
-  ======================================================= */
-
-  const handleWithdraw = (
-    event: React.FormEvent<HTMLFormElement>
-  ) => {
-    event.preventDefault();
-
-    const amount = Number(withdrawAmount);
-
-    if (!connectedWallet) {
-      alert(
-        "Please connect your TON Wallet first."
-      );
-
-      return;
-    }
-
-    if (
-      !Number.isFinite(amount) ||
-      amount <= 0
-    ) {
-      alert(
-        "Please enter a valid withdrawal amount."
-      );
-
-      return;
-    }
-
-    if (amount < MIN_WITHDRAW) {
-      alert(
-        `Minimum withdrawal is ${MIN_WITHDRAW.toLocaleString()} AdCoins.`
-      );
-
-      return;
-    }
-
-    if (amount > coins) {
-      alert(
-        "You do not have enough AdCoins."
-      );
-
-      return;
-    }
-
-    setIsSubmittingWithdraw(true);
-
-    /*
-     * IMPORTANT:
-     * Current frontend only simulates the request.
-     * Real withdrawal must go through backend.
-     */
-
-    window.setTimeout(() => {
-      setCoins((previous) =>
-        previous - amount
-      );
-
-      setWithdrawAmount("");
-
-      setIsSubmittingWithdraw(false);
 
       haptic("medium");
 
-      alert(
-        "Withdrawal request created. Production payout requires backend verification."
+
+      const amount =
+        localMining;
+
+
+      /*
+         Immediate UI.
+
+         Real implementation should
+         call secure Supabase RPC.
+      */
+
+      setProfile({
+
+        ...profile,
+
+        coins:
+          profile.coins + amount,
+
+      });
+
+
+      setLocalMining(0);
+
+
+      if (
+        supabase &&
+        userId
+      ) {
+
+        const {
+          error,
+        } = await supabase.rpc(
+          "claim_mining",
+          {
+            p_telegram_id:
+              userId,
+          }
+        );
+
+
+        if (error) {
+
+          console.warn(
+            "claim_mining RPC:",
+            error.message
+          );
+
+        }
+
+      }
+
+
+      showNotice(
+        "Cloud Mining",
+        `+${formatCoins(amount)} AdCoins u morën me sukses.`,
+        "success"
       );
-    }, 1000);
-  };
+
+    };
+
 
   /* =======================================================
-     COPY REFERRAL
+     ADSGRAM
   ======================================================= */
 
-  const handleCopyRef = async () => {
-    try {
-      await navigator.clipboard.writeText(
-        referralLink
-      );
+  const handleWatchAdsgram =
+    async () => {
 
-      setCopiedRef(true);
+      if (isWatchingAd)
+        return;
 
-      haptic("light");
 
-      window.setTimeout(() => {
-        setCopiedRef(false);
-      }, 2000);
-    } catch {
-      alert(
-        "Could not copy the referral link."
-      );
-    }
-  };
+      const Adsgram =
+        window.Adsgram;
+
+
+      if (!Adsgram) {
+
+        showNotice(
+          "Adsgram",
+          "Adsgram është i disponueshëm vetëm kur Mini App hapet në Telegram.",
+          "error"
+        );
+
+        return;
+      }
+
+
+      setIsWatchingAd(true);
+
+
+      try {
+
+        const controller =
+          Adsgram.init({
+            blockId:
+              ADSGRAM_BLOCK_ID,
+          });
+
+
+        await controller.show();
+
+
+        /*
+           VERY IMPORTANT:
+
+           Do NOT trust the frontend
+           to award coins.
+
+           Real reward should be confirmed
+           by Adsgram/backend.
+
+           For now we only show success.
+        */
+
+        haptic("success" as any);
+
+
+        showNotice(
+          "Ad completed",
+          "Reklama u përfundua. Shpërblimi duhet të konfirmohet nga serveri.",
+          "info"
+        );
+
+
+      } catch (error) {
+
+        console.error(
+          "Adsgram error:",
+          error
+        );
+
+
+        showNotice(
+          "Adsgram",
+          "Reklama nuk është aktive ose aktualisht nuk ka reklamë të disponueshme.",
+          "error"
+        );
+
+
+      } finally {
+
+        setIsWatchingAd(false);
+
+      }
+
+    };
+
 
   /* =======================================================
      TELEGRAM STARS
   ======================================================= */
 
-  const handleBuyWithStars = (
-    packageType: string,
-    starCost: number
-  ) => {
-    const tg = window.Telegram?.WebApp;
+  const buyWithStars =
+    async (
+      product:
+        | "energy"
+        | "coins"
+    ) => {
 
-    /*
-     * Real Telegram Stars purchases require
-     * an invoice generated by the backend.
-     */
+      if (!userId) {
 
-    if (tg?.openInvoice) {
-      alert(
-        `Stars purchase selected: ${packageType} — ${starCost} Stars.\n\nA real invoice URL must be generated by the backend.`
-      );
+        showNotice(
+          "Telegram",
+          "Hape aplikacionin brenda Telegram për të përdorur Stars.",
+          "error"
+        );
 
-      return;
-    }
+        return;
+      }
 
-    alert(
-      `Telegram Stars purchase:\n${packageType}\n${starCost} Stars\n\nOpen this Mini App inside Telegram for the real payment flow.`
-    );
-  };
+
+      setActionLoading(true);
+
+
+      try {
+
+        /*
+           REAL PAYMENT:
+
+           Supabase Edge Function:
+           create-stars-invoice
+
+           Backend receives:
+
+           telegram_id
+           product
+
+           and creates Telegram Stars invoice.
+        */
+
+        if (!supabase) {
+
+          showNotice(
+            "Stars",
+            "Supabase nuk është lidhur ende. Shto VITE_SUPABASE_URL dhe VITE_SUPABASE_ANON_KEY.",
+            "error"
+          );
+
+          return;
+
+        }
+
+
+        const {
+          data,
+          error,
+        } =
+          await supabase.functions.invoke(
+            STARS_FUNCTION,
+            {
+              body: {
+                telegram_id:
+                  userId,
+
+                product,
+              },
+            }
+          );
+
+
+        if (error)
+          throw error;
+
+
+        if (
+          !data?.invoice_url
+        ) {
+
+          throw new Error(
+            "Backend nuk ktheu invoice_url."
+          );
+
+        }
+
+
+        const openInvoice =
+          window.Telegram?.WebApp
+            ?.openInvoice;
+
+
+        if (!openInvoice) {
+
+          showNotice(
+            "Telegram Stars",
+            "Telegram WebApp invoice nuk është i disponueshëm.",
+            "error"
+          );
+
+          return;
+        }
+
+
+        openInvoice(
+          data.invoice_url,
+          async (
+            status
+          ) => {
+
+            console.log(
+              "Telegram Stars status:",
+              status
+            );
+
+
+            if (
+              status ===
+              "paid"
+            ) {
+
+              haptic(
+                "medium"
+              );
+
+
+              /*
+                 IMPORTANT:
+
+                 Backend should update
+                 the balance after Telegram
+                 confirms the payment.
+
+                 We reload the profile.
+              */
+
+              await loadProfile();
+
+
+              showNotice(
+                "Payment successful",
+                "Pagesa me Telegram Stars u krye me sukses.",
+                "success"
+              );
+
+            }
+
+
+            if (
+              status ===
+              "cancelled"
+            ) {
+
+              showNotice(
+                "Payment cancelled",
+                "Pagesa u anulua.",
+                "info"
+              );
+
+            }
+
+
+            if (
+              status ===
+              "failed"
+            ) {
+
+              showNotice(
+                "Payment failed",
+                "Pagesa nuk u krye.",
+                "error"
+              );
+
+            }
+
+          }
+        );
+
+      } catch (error) {
+
+        console.error(
+          "Stars payment:",
+          error
+        );
+
+
+        showNotice(
+          "Telegram Stars",
+          "Nuk u krijua invoice-i. Kontrollo Supabase Edge Function.",
+          "error"
+        );
+
+      } finally {
+
+        setActionLoading(false);
+
+      }
+
+    };
+
 
   /* =======================================================
-     ENERGY REFILL
+     COPY REFERRAL
   ======================================================= */
 
-  const refillEnergyDemo = () => {
-    setEnergy(MAX_ENERGY);
+  const handleCopyReferral =
+    async () => {
 
-    haptic("medium");
+      if (!referralLink) {
 
-    alert("Energy restored to 1000.");
-  };
+        showNotice(
+          "Referral",
+          "Referral link nuk është ende i disponueshëm.",
+          "error"
+        );
+
+        return;
+
+      }
+
+
+      try {
+
+        await navigator.clipboard.writeText(
+          referralLink
+        );
+
+        setCopiedRef(true);
+
+        haptic("light");
+
+
+        setTimeout(() => {
+
+          setCopiedRef(false);
+
+        }, 2000);
+
+
+      } catch {
+
+        showNotice(
+          "Referral",
+          referralLink,
+          "info"
+        );
+
+      }
+
+    };
+
+
+  /* =======================================================
+     WALLET
+  ======================================================= */
+
+  const handleConnectWallet =
+    () => {
+
+      /*
+         This is intentionally NOT a fake wallet address.
+
+         Later integrate TON Connect.
+
+         Example:
+
+         @tonconnect/ui-react
+      */
+
+      showNotice(
+        "TON Wallet",
+        "TON Connect do të lidhet në hapin e wallet integration. Nuk po përdorim wallet adresë false.",
+        "info"
+      );
+
+    };
+
+
+  /* =======================================================
+     WITHDRAW
+  ======================================================= */
+
+  const handleWithdraw =
+    async (
+      event:
+        React.FormEvent
+    ) => {
+
+      event.preventDefault();
+
+
+      if (!profile)
+        return;
+
+
+      const amount =
+        Number(
+          withdrawAmount
+        );
+
+
+      if (
+        !profile.wallet_address
+      ) {
+
+        showNotice(
+          "Wallet",
+          "Së pari duhet të lidhësh TON Wallet.",
+          "error"
+        );
+
+        return;
+
+      }
+
+
+      if (
+        !Number.isFinite(
+          amount
+        ) ||
+        amount < MIN_WITHDRAWAL
+      ) {
+
+        showNotice(
+          "Withdrawal",
+          `Minimumi është ${formatCoins(
+            MIN_WITHDRAWAL
+          )} AdCoins.`,
+          "error"
+        );
+
+        return;
+
+      }
+
+
+      if (
+        amount >
+        profile.coins
+      ) {
+
+        showNotice(
+          "Withdrawal",
+          "Nuk ke mjaftueshëm AdCoins.",
+          "error"
+        );
+
+        return;
+
+      }
+
+
+      if (!supabase) {
+
+        showNotice(
+          "Supabase",
+          "Lidh Supabase për të dërguar withdrawal request.",
+          "error"
+        );
+
+        return;
+
+      }
+
+
+      setActionLoading(true);
+
+
+      try {
+
+        const {
+          error,
+        } =
+          await supabase
+            .from(
+              "withdrawals"
+            )
+            .insert({
+
+              telegram_id:
+                userId,
+
+              wallet_address:
+                profile.wallet_address,
+
+              amount,
+
+              status:
+                "pending",
+
+            });
+
+
+        if (error)
+          throw error;
+
+
+        setWithdrawAmount("");
+
+
+        showNotice(
+          "Withdrawal",
+          "Kërkesa u dërgua me sukses dhe është në pritje të kontrollit.",
+          "success"
+        );
+
+
+        await loadWithdrawals();
+
+
+      } catch (error) {
+
+        console.error(
+          error
+        );
+
+
+        showNotice(
+          "Withdrawal",
+          "Nuk u dërgua kërkesa.",
+          "error"
+        );
+
+      } finally {
+
+        setActionLoading(false);
+
+      }
+
+    };
+
+
+  /* =======================================================
+     LOAD WITHDRAWALS
+  ======================================================= */
+
+  const loadWithdrawals =
+    useCallback(async () => {
+
+      if (
+        !supabase ||
+        !userId
+      )
+        return;
+
+
+      const {
+        data,
+        error,
+      } =
+        await supabase
+          .from(
+            "withdrawals"
+          )
+          .select(
+            "id,amount,wallet_address,status,created_at"
+          )
+          .eq(
+            "telegram_id",
+            userId
+          )
+          .order(
+            "created_at",
+            {
+              ascending:
+                false,
+            }
+          )
+          .limit(20);
+
+
+      if (
+        !error &&
+        data
+      ) {
+
+        setWithdrawals(
+          data
+        );
+
+      }
+
+    }, [userId]);
+
+
+  useEffect(() => {
+
+    if (
+      activeTab ===
+      "withdraw"
+    ) {
+
+      loadWithdrawals();
+
+    }
+
+  }, [
+    activeTab,
+    loadWithdrawals,
+  ]);
+
+
+  /* =======================================================
+     LEADERBOARD
+  ======================================================= */
+
+  const loadLeaderboard =
+    useCallback(async () => {
+
+      if (!supabase)
+        return;
+
+
+      const {
+        data,
+        error,
+      } =
+        await supabase
+          .from(
+            "profiles"
+          )
+          .select(
+            "telegram_id,first_name,username,coins"
+          )
+          .order(
+            "coins",
+            {
+              ascending:
+                false,
+            }
+          )
+          .limit(20);
+
+
+      if (
+        !error &&
+        data
+      ) {
+
+        setLeaderboard(
+          data
+        );
+
+      }
+
+    }, []);
+
+
+  useEffect(() => {
+
+    if (
+      activeTab ===
+      "ranking"
+    ) {
+
+      loadLeaderboard();
+
+    }
+
+  }, [
+    activeTab,
+    loadLeaderboard,
+  ]);
+
+
+  /* =======================================================
+     LOADING
+  ======================================================= */
+
+  if (loading) {
+
+    return (
+
+      <div className="
+        min-h-screen
+        bg-slate-950
+        text-white
+        flex
+        items-center
+        justify-center
+      ">
+
+        <div className="
+          flex
+          flex-col
+          items-center
+          gap-3
+        ">
+
+          <div className="
+            w-14
+            h-14
+            rounded-2xl
+            bg-gradient-to-br
+            from-indigo-500
+            to-purple-600
+            flex
+            items-center
+            justify-center
+          ">
+
+            <Coins className="
+              w-7
+              h-7
+              text-yellow-300
+            " />
+
+          </div>
+
+
+          <Loader2 className="
+            w-5
+            h-5
+            animate-spin
+            text-indigo-400
+          " />
+
+
+          <span className="
+            text-xs
+            text-slate-400
+          ">
+
+            Loading AdDev Rewards...
+
+          </span>
+
+        </div>
+
+      </div>
+
+    );
+
+  }
+
+
+  /* =======================================================
+     SAFE PROFILE
+  ======================================================= */
+
+  const currentProfile =
+    profile || {
+
+      telegram_id:
+        userId,
+
+      first_name:
+        "User",
+
+      username:
+        null,
+
+      coins:
+        0,
+
+      energy:
+        0,
+
+      mined_coins:
+        0,
+
+      streak:
+        1,
+
+      wallet_address:
+        null,
+
+      referral_code:
+        referralCode,
+
+      referred_by:
+        null,
+
+    };
+
 
   /* =======================================================
      RENDER
   ======================================================= */
 
   return (
-    <div className="flex flex-col h-screen w-screen max-w-md mx-auto bg-slate-950 text-slate-100 font-sans select-none overflow-hidden relative shadow-2xl border border-slate-800">
 
-      {/* ===================================================
+    <div className="
+      flex
+      flex-col
+      h-screen
+      w-screen
+      max-w-md
+      mx-auto
+      bg-slate-950
+      text-slate-100
+      font-sans
+      select-none
+      overflow-hidden
+      relative
+      shadow-2xl
+      border
+      border-slate-800
+    ">
+
+
+      {/* =================================================
           HEADER
-      =================================================== */}
+      ================================================= */}
 
-      <header className="px-5 pt-5 pb-3 flex justify-between items-center z-10 shrink-0">
+      <header className="
+        px-5
+        pt-6
+        pb-3
+        flex
+        justify-between
+        items-center
+        z-10
+        shrink-0
+      ">
 
-        <div className="flex items-center space-x-3">
+        <div className="
+          flex
+          items-center
+          space-x-3
+        ">
 
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-lg text-white shadow-lg">
+          <div className="
+            w-10
+            h-10
+            rounded-xl
+            bg-gradient-to-tr
+            from-indigo-500
+            to-purple-500
+            flex
+            items-center
+            justify-center
+            font-bold
+            text-lg
+            text-white
+            shadow-lg
+          ">
+
             A
+
           </div>
+
 
           <div>
 
-            <h1 className="text-lg font-extrabold tracking-wide text-white">
+            <h1 className="
+              text-lg
+              font-extrabold
+              tracking-wide
+              text-white
+            ">
+
               AdDev Rewards
+
             </h1>
 
-            <div className="flex items-center space-x-1 text-xs text-indigo-400 font-medium">
 
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <div className="
+              flex
+              items-center
+              space-x-1
+              text-xs
+              text-indigo-400
+              font-medium
+            ">
+
+              <ShieldCheck className="
+                w-3.5
+                h-3.5
+                text-emerald-400
+              " />
 
               <span>
                 Level: Pro Publisher
@@ -732,155 +1768,292 @@ export default function App() {
 
         </div>
 
-        <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-full">
 
-          <Flame className="w-4 h-4 text-orange-500" />
+        <div className="
+          flex
+          items-center
+          space-x-2
+          bg-slate-900/90
+          border
+          border-slate-800
+          px-3
+          py-1.5
+          rounded-full
+        ">
 
-          <span className="text-sm font-bold text-orange-400">
-            {dailyStreak} Days
+          <Flame className="
+            w-4
+            h-4
+            text-orange-500
+          " />
+
+          <span className="
+            text-sm
+            font-bold
+            text-orange-400
+          ">
+
+            {currentProfile.streak}
+            {" "}
+            Days
+
           </span>
 
         </div>
 
       </header>
 
-      {/* ===================================================
+
+      {/* =================================================
           MAIN
-      =================================================== */}
+      ================================================= */}
 
-      <main className="flex-1 overflow-y-auto px-5 py-2 z-10 pb-24">
+      <main className="
+        flex-1
+        overflow-y-auto
+        px-5
+        py-2
+        z-10
+        pb-24
+      ">
 
-        {/* =================================================
+
+        {/* ===============================================
             HOME
-        ================================================= */}
+        =============================================== */}
 
         {activeTab === "home" && (
 
-          <div className="flex flex-col items-center space-y-3 pt-1">
+          <div className="
+            flex
+            flex-col
+            items-center
+            space-y-3
+          ">
+
 
             {/* BALANCE */}
 
-            <div className="text-center bg-slate-900/90 border border-slate-800 rounded-3xl p-4 w-full shadow-xl">
+            <div className="
+              text-center
+              bg-slate-900/90
+              border
+              border-slate-800/80
+              rounded-3xl
+              p-4
+              w-full
+              shadow-xl
+            ">
 
-              <p className="text-[11px] uppercase tracking-widest text-slate-400 font-semibold mb-1">
+              <p className="
+                text-[11px]
+                uppercase
+                tracking-widest
+                text-slate-400
+                font-semibold
+                mb-1
+              ">
+
                 Total AdCoins
+
               </p>
 
-              <div className="flex items-center justify-center space-x-2">
 
-                <Coins className="w-7 h-7 text-yellow-400" />
+              <div className="
+                flex
+                items-center
+                justify-center
+                space-x-2
+              ">
 
-                <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500">
+                <Coins className="
+                  w-7
+                  h-7
+                  text-yellow-400
+                " />
 
-                  {coins.toLocaleString()}
+
+                <span className="
+                  text-3xl
+                  font-black
+                  text-transparent
+                  bg-clip-text
+                  bg-gradient-to-r
+                  from-yellow-300
+                  via-amber-400
+                  to-yellow-500
+                ">
+
+                  {formatCoins(
+                    currentProfile.coins
+                  )}
 
                 </span>
 
               </div>
 
-              <p className="text-[10px] text-slate-400 mt-1">
-                Min. Payout:{" "}
-                {MIN_WITHDRAW.toLocaleString()} AdCoins
+
+              <p className="
+                text-[10px]
+                text-slate-400
+                mt-1
+              ">
+
+                Min. Payout:
+                {" "}
+                {formatCoins(
+                  MIN_WITHDRAWAL
+                )}
+
+                {" "}
+                AdCoins
+
               </p>
 
             </div>
+
 
             {/* TAP */}
 
-            <div
-              key={tapAnimation}
+            <button
               onClick={handleTap}
-              className="relative w-40 h-40 rounded-full bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-1.5 shadow-2xl cursor-pointer active:scale-95 transition-transform flex items-center justify-center"
+              className="
+                relative
+                w-40
+                h-40
+                rounded-full
+                bg-gradient-to-br
+                from-indigo-600
+                via-purple-600
+                to-pink-600
+                p-1.5
+                shadow-2xl
+                cursor-pointer
+                active:scale-95
+                transition-transform
+                flex
+                items-center
+                justify-center
+              "
             >
 
-              <div className="w-full h-full rounded-full bg-slate-950 flex flex-col items-center justify-center">
+              <div className="
+                w-full
+                h-full
+                rounded-full
+                bg-slate-950
+                flex
+                flex-col
+                items-center
+                justify-center
+              ">
 
-                <Gamepad2 className="w-12 h-12 text-indigo-400 mb-1" />
+                <Gamepad2 className="
+                  w-12
+                  h-12
+                  text-indigo-400
+                  mb-1
+                " />
 
-                <span className="text-sm font-bold text-white tracking-wider">
+                <span className="
+                  text-sm
+                  font-bold
+                  text-white
+                  tracking-wider
+                ">
+
                   TAP / PLAY
+
                 </span>
 
-                <span className="text-[10px] text-indigo-300 font-medium">
+
+                <span className="
+                  text-[10px]
+                  text-indigo-300
+                  font-medium
+                ">
+
                   +1 AdCoin
+
                 </span>
 
               </div>
 
-            </div>
+            </button>
 
-            {/* MINING */}
-
-            <div className="w-full bg-slate-900/80 border border-slate-800 rounded-2xl p-3 flex items-center justify-between shadow-lg">
-
-              <div className="flex items-center space-x-3">
-
-                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
-
-                  <Cpu
-                    className="w-4 h-4"
-                  />
-
-                </div>
-
-                <div>
-
-                  <h3 className="text-xs font-bold text-white">
-                    Cloud Mining
-                  </h3>
-
-                  <p className="text-[11px] text-yellow-400 font-mono">
-                    Mined:{" "}
-                    {minedCoins.toLocaleString()} AdCoins
-                  </p>
-
-                </div>
-
-              </div>
-
-              <button
-                onClick={handleClaimMined}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-md"
-              >
-                Claim
-              </button>
-
-            </div>
 
             {/* ENERGY */}
 
-            <div className="w-full bg-slate-900/80 border border-slate-800 rounded-2xl p-3 shadow-lg">
+            <div className="
+              w-full
+              bg-slate-900/80
+              border
+              border-slate-800
+              rounded-2xl
+              p-3
+              shadow-lg
+            ">
 
-              <div className="flex justify-between items-center text-xs font-semibold mb-2">
+              <div className="
+                flex
+                justify-between
+                items-center
+                text-xs
+                font-semibold
+                mb-1.5
+              ">
 
-                <div className="flex items-center gap-1.5">
+                <span className="
+                  text-slate-300
+                ">
 
-                  <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                  Energy
 
-                  <span className="text-slate-300">
-                    Energy
-                  </span>
+                </span>
 
-                </div>
 
-                <span className="text-indigo-400 font-mono">
-                  {energy} / {MAX_ENERGY}
+                <span className="
+                  text-indigo-400
+                  font-mono
+                ">
+
+                  {currentProfile.energy}
+                  {" "}
+                  /
+                  {" "}
+                  {MAX_ENERGY}
+
                 </span>
 
               </div>
 
-              <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+
+              <div className="
+                w-full
+                bg-slate-950
+                rounded-full
+                h-2
+                overflow-hidden
+                border
+                border-slate-800
+              ">
 
                 <div
-                  className="bg-gradient-to-r from-indigo-500 to-cyan-400 h-full rounded-full transition-all"
+                  className="
+                    bg-gradient-to-r
+                    from-indigo-500
+                    to-cyan-400
+                    h-full
+                    rounded-full
+                  "
                   style={{
-                    width: `${Math.max(
-                      0,
-                      Math.min(
-                        100,
-                        (energy / MAX_ENERGY) * 100
-                      )
-                    )}%`,
+                    width:
+                      `${
+                        (
+                          currentProfile.energy /
+                          MAX_ENERGY
+                        ) * 100
+                      }%`,
                   }}
                 />
 
@@ -888,150 +2061,469 @@ export default function App() {
 
             </div>
 
-          </div>
 
-        )}
+            {/* MINING */}
 
-        {/* =================================================
-            TASKS
-        ================================================= */}
+            <div className="
+              w-full
+              bg-slate-900/80
+              border
+              border-slate-800
+              rounded-2xl
+              p-3
+              flex
+              items-center
+              justify-between
+              shadow-lg
+            ">
 
-        {activeTab === "tasks" && (
+              <div className="
+                flex
+                items-center
+                space-x-3
+              ">
 
-          <div className="space-y-3 pt-1">
+                <div className="
+                  w-9
+                  h-9
+                  rounded-xl
+                  bg-amber-500/20
+                  border
+                  border-amber-500/30
+                  flex
+                  items-center
+                  justify-center
+                  text-amber-400
+                ">
 
-            <h2 className="text-lg font-bold text-white mb-3">
-              Tasks & Monetization
-            </h2>
-
-            {/* CPX */}
-
-            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between shadow-lg">
-
-              <div className="flex items-center space-x-3">
-
-                <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
-
-                  <BarChart3 className="w-5 h-5" />
+                  <Cpu className="
+                    w-4
+                    h-4
+                  " />
 
                 </div>
 
+
                 <div>
 
-                  <h3 className="text-xs font-bold text-white">
-                    CPX Research Offerwall
+                  <h3 className="
+                    text-xs
+                    font-bold
+                    text-white
+                  ">
+
+                    Cloud Mining
+
                   </h3>
 
-                  <p className="text-[11px] text-slate-400">
-                    High paying surveys
+
+                  <p className="
+                    text-[11px]
+                    text-yellow-400
+                    font-mono
+                  ">
+
+                    Mined:
+                    {" "}
+                    {formatCoins(
+                      localMining
+                    )}
+                    {" "}
+                    AdCoins
+
                   </p>
 
                 </div>
 
               </div>
 
+
               <button
-                onClick={() =>
-                  setShowOfferwallModal(true)
+                onClick={
+                  handleClaimMining
                 }
-                className="bg-purple-600 hover:bg-purple-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center"
+                className="
+                  bg-emerald-600
+                  hover:bg-emerald-500
+                  text-white
+                  px-3
+                  py-1.5
+                  rounded-xl
+                  text-xs
+                  font-bold
+                "
               >
-                Open
-                <ExternalLink className="w-3 h-3 ml-1" />
+
+                Claim
+
               </button>
 
             </div>
 
-            {/* STARS */}
+          </div>
 
-            <div className="bg-gradient-to-r from-amber-950/40 to-yellow-950/40 border border-amber-500/30 rounded-2xl p-4 shadow-lg">
+        )}
 
-              <div className="flex items-center space-x-2 mb-3">
 
-                <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+        {/* ===============================================
+            TASKS
+        =============================================== */}
 
-                <h3 className="text-sm font-bold text-white">
-                  Telegram Stars Shop
-                </h3>
+        {activeTab === "tasks" && (
 
-              </div>
+          <div className="
+            space-y-3
+          ">
 
-              <div className="grid grid-cols-2 gap-2.5">
 
-                <button
-                  onClick={() =>
-                    handleBuyWithStars(
-                      "Energy Refill",
-                      50
-                    )
-                  }
-                  className="bg-slate-900 border border-amber-500/20 p-2.5 rounded-xl text-left"
-                >
+            <h2 className="
+              text-lg
+              font-bold
+              text-white
+            ">
 
-                  <div className="text-xs font-bold text-white mb-0.5">
-                    ⚡ Max Energy
-                  </div>
+              Tasks & Monetization
 
-                  <div className="text-[11px] text-yellow-400 font-extrabold">
-                    50 Stars ⭐
-                  </div>
+            </h2>
 
-                </button>
 
-                <button
-                  onClick={() =>
-                    handleBuyWithStars(
-                      "5,000 AdCoins",
-                      100
-                    )
-                  }
-                  className="bg-slate-900 border border-amber-500/20 p-2.5 rounded-xl text-left"
-                >
+            {/* CPX */}
 
-                  <div className="text-xs font-bold text-white mb-0.5">
-                    🪙 +5,000 AdCoins
-                  </div>
+            <div className="
+              bg-slate-900/80
+              border
+              border-slate-800
+              rounded-2xl
+              p-3.5
+              flex
+              items-center
+              justify-between
+              shadow-lg
+            ">
 
-                  <div className="text-[11px] text-yellow-400 font-extrabold">
-                    100 Stars ⭐
-                  </div>
+              <div className="
+                flex
+                items-center
+                space-x-3
+              ">
 
-                </button>
+                <div className="
+                  w-10
+                  h-10
+                  rounded-xl
+                  bg-purple-500/20
+                  border
+                  border-purple-500/30
+                  flex
+                  items-center
+                  justify-center
+                  text-purple-400
+                ">
 
-              </div>
-
-            </div>
-
-            {/* ADSGRAM */}
-
-            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between shadow-lg">
-
-              <div className="flex items-center space-x-3">
-
-                <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-
-                  <PlaySquare className="w-5 h-5" />
+                  📊
 
                 </div>
 
+
                 <div>
 
-                  <h3 className="text-xs font-bold text-white">
-                    Watch Sponsored Ad
+                  <h3 className="
+                    text-xs
+                    font-bold
+                    text-white
+                  ">
+
+                    CPX Research
+
                   </h3>
 
-                  <p className="text-[11px] text-slate-400">
-                    +{AD_REWARD} AdCoins (Adsgram)
+
+                  <p className="
+                    text-[11px]
+                    text-slate-400
+                  ">
+
+                    High paying surveys
+
                   </p>
 
                 </div>
 
               </div>
 
+
               <button
-                onClick={handleWatchAdsgram}
-                disabled={isWatchingAd}
-                className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-md"
+                onClick={() =>
+                  setShowOfferwall(
+                    true
+                  )
+                }
+                className="
+                  bg-purple-600
+                  hover:bg-purple-500
+                  text-white
+                  px-3.5
+                  py-2
+                  rounded-xl
+                  text-xs
+                  font-bold
+                  flex
+                  items-center
+                "
+              >
+
+                Open
+
+                <ExternalLink className="
+                  w-3
+                  h-3
+                  ml-1
+                " />
+
+              </button>
+
+            </div>
+
+
+            {/* STARS SHOP */}
+
+            <div className="
+              bg-gradient-to-r
+              from-amber-950/40
+              to-yellow-950/40
+              border
+              border-amber-500/30
+              rounded-2xl
+              p-4
+              shadow-lg
+            ">
+
+              <div className="
+                flex
+                items-center
+                space-x-2
+                mb-3
+              ">
+
+                <Star className="
+                  w-5
+                  h-5
+                  text-yellow-400
+                  fill-yellow-400
+                " />
+
+                <h3 className="
+                  text-sm
+                  font-bold
+                  text-white
+                ">
+
+                  Telegram Stars Shop
+
+                </h3>
+
+              </div>
+
+
+              <div className="
+                grid
+                grid-cols-2
+                gap-2.5
+              ">
+
+
+                <button
+                  disabled={
+                    actionLoading
+                  }
+                  onClick={() =>
+                    buyWithStars(
+                      "energy"
+                    )
+                  }
+                  className="
+                    bg-slate-900/90
+                    border
+                    border-amber-500/20
+                    p-3
+                    rounded-xl
+                    text-left
+                    disabled:opacity-50
+                  "
+                >
+
+                  <div className="
+                    text-xs
+                    font-bold
+                    text-white
+                  ">
+
+                    ⚡ Energy Refill
+
+                  </div>
+
+
+                  <div className="
+                    text-[11px]
+                    text-yellow-400
+                    font-extrabold
+                    mt-1
+                  ">
+
+                    50 Stars ⭐
+
+                  </div>
+
+                </button>
+
+
+                <button
+                  disabled={
+                    actionLoading
+                  }
+                  onClick={() =>
+                    buyWithStars(
+                      "coins"
+                    )
+                  }
+                  className="
+                    bg-slate-900/90
+                    border
+                    border-amber-500/20
+                    p-3
+                    rounded-xl
+                    text-left
+                    disabled:opacity-50
+                  "
+                >
+
+                  <div className="
+                    text-xs
+                    font-bold
+                    text-white
+                  ">
+
+                    🪙 +5,000 AdCoins
+
+                  </div>
+
+
+                  <div className="
+                    text-[11px]
+                    text-yellow-400
+                    font-extrabold
+                    mt-1
+                  ">
+
+                    100 Stars ⭐
+
+                  </div>
+
+                </button>
+
+              </div>
+
+
+              <p className="
+                text-[9px]
+                text-slate-500
+                mt-3
+              ">
+
+                Pagesa hapet përmes Telegram Stars.
+                Invoice-i gjenerohet nga backend.
+
+              </p>
+
+            </div>
+
+
+            {/* ADSGRAM */}
+
+            <div className="
+              bg-slate-900/80
+              border
+              border-slate-800
+              rounded-2xl
+              p-3.5
+              flex
+              items-center
+              justify-between
+              shadow-lg
+            ">
+
+              <div className="
+                flex
+                items-center
+                space-x-3
+              ">
+
+                <div className="
+                  w-10
+                  h-10
+                  rounded-xl
+                  bg-cyan-500/20
+                  border
+                  border-cyan-500/30
+                  flex
+                  items-center
+                  justify-center
+                  text-cyan-400
+                ">
+
+                  <PlaySquare className="
+                    w-5
+                    h-5
+                  " />
+
+                </div>
+
+
+                <div>
+
+                  <h3 className="
+                    text-xs
+                    font-bold
+                    text-white
+                  ">
+
+                    Watch Sponsored Ad
+
+                  </h3>
+
+
+                  <p className="
+                    text-[11px]
+                    text-slate-400
+                  ">
+
+                    Adsgram
+
+                  </p>
+
+                </div>
+
+              </div>
+
+
+              <button
+                disabled={
+                  isWatchingAd
+                }
+                onClick={
+                  handleWatchAdsgram
+                }
+                className="
+                  bg-cyan-600
+                  hover:bg-cyan-500
+                  text-white
+                  px-3.5
+                  py-2
+                  rounded-xl
+                  text-xs
+                  font-bold
+                  disabled:opacity-50
+                "
               >
 
                 {isWatchingAd
@@ -1042,37 +2534,108 @@ export default function App() {
 
             </div>
 
-            {/* BONUS */}
 
-            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between">
+            {/* ENERGY BONUS */}
 
-              <div className="flex items-center gap-3">
+            <div className="
+              bg-slate-900/80
+              border
+              border-slate-800
+              rounded-2xl
+              p-3.5
+              flex
+              items-center
+              justify-between
+              shadow-lg
+            ">
 
-                <div className="w-10 h-10 rounded-xl bg-yellow-500/10 flex items-center justify-center">
+              <div className="
+                flex
+                items-center
+                space-x-3
+              ">
 
-                  <Gift className="w-5 h-5 text-yellow-400" />
+                <div className="
+                  w-10
+                  h-10
+                  rounded-xl
+                  bg-yellow-500/10
+                  flex
+                  items-center
+                  justify-center
+                ">
+
+                  <Gift className="
+                    w-5
+                    h-5
+                    text-yellow-400
+                  " />
 
                 </div>
 
+
                 <div>
 
-                  <h3 className="text-xs font-bold text-white">
+                  <h3 className="
+                    text-xs
+                    font-bold
+                    text-white
+                  ">
+
                     Energy Bonus
+
                   </h3>
 
-                  <p className="text-[11px] text-slate-400">
+
+                  <p className="
+                    text-[11px]
+                    text-slate-400
+                  ">
+
                     Restore your energy
+
                   </p>
 
                 </div>
 
               </div>
 
+
               <button
-                onClick={refillEnergyDemo}
-                className="bg-indigo-600 text-white px-3 py-2 rounded-xl text-xs font-bold"
+                onClick={() => {
+
+                  setProfile(
+                    previous =>
+                      previous
+                        ? {
+                            ...previous,
+                            energy:
+                              MAX_ENERGY,
+                          }
+                        : previous
+                  );
+
+
+                  showNotice(
+                    "Energy",
+                    "Energy restored to 1000.",
+                    "success"
+                  );
+
+                }}
+                className="
+                  bg-indigo-600
+                  text-white
+                  px-3.5
+                  py-2
+                  rounded-xl
+                  text-xs
+                  font-bold
+                "
               >
+
                 Refill
+
               </button>
 
             </div>
@@ -1081,126 +2644,475 @@ export default function App() {
 
         )}
 
-        {/* =================================================
+
+        {/* ===============================================
             WITHDRAW
-        ================================================= */}
+        =============================================== */}
 
         {activeTab === "withdraw" && (
 
-          <div className="space-y-4 pt-1">
+          <div className="
+            space-y-4
+          ">
 
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl">
 
-              <h2 className="text-lg font-bold text-white mb-1">
-                Withdraw Funds
-              </h2>
+            <div className="
+              bg-slate-900
+              border
+              border-slate-800
+              rounded-3xl
+              p-5
+              shadow-xl
+            ">
 
-              <p className="text-xs text-slate-400 mb-4">
-                Minimum payout:{" "}
+              <div className="
+                flex
+                justify-between
+                items-center
+                mb-1
+              ">
+
+                <h2 className="
+                  text-lg
+                  font-bold
+                  text-white
+                ">
+
+                  Withdraw
+
+                </h2>
+
+
+                <button
+                  onClick={() =>
+                    setShowHistory(
+                      true
+                    )
+                  }
+                  className="
+                    text-slate-400
+                  "
+                >
+
+                  <History className="
+                    w-5
+                    h-5
+                  " />
+
+                </button>
+
+              </div>
+
+
+              <p className="
+                text-xs
+                text-slate-400
+                mb-4
+              ">
+
+                Minimum payout:
+                {" "}
                 <strong>
-                  {MIN_WITHDRAW.toLocaleString()} AdCoins
+                  {formatCoins(
+                    MIN_WITHDRAWAL
+                  )}
+                  {" "}
+                  AdCoins
                 </strong>
+
               </p>
+
 
               {/* WALLET */}
 
-              <div className="mb-4 bg-slate-950 border border-slate-800 rounded-2xl p-3.5">
+              <div className="
+                mb-4
+                bg-slate-950
+                border
+                border-slate-800
+                rounded-2xl
+                p-3.5
+                flex
+                items-center
+                justify-between
+              ">
 
-                <div className="flex items-center justify-between">
+                <div>
 
-                  <div>
+                  <span className="
+                    block
+                    text-[10px]
+                    text-slate-400
+                    uppercase
+                  ">
 
-                    <span className="block text-[10px] text-slate-400 uppercase font-semibold">
-                      Telegram Wallet
-                    </span>
+                    TON Wallet
 
-                    <span className="block text-xs font-bold text-emerald-400 mt-1">
-                      {connectedWallet ||
-                        "Not Connected"}
-                    </span>
-
-                  </div>
-
-                  <button
-                    onClick={handleConnectWallet}
-                    disabled={
-                      isConnectingWallet ||
-                      Boolean(connectedWallet)
-                    }
-                    className="bg-indigo-600 disabled:opacity-60 text-white px-3 py-2 rounded-xl text-xs font-bold"
-                  >
-                    {isConnectingWallet
-                      ? "Connecting..."
-                      : connectedWallet
-                      ? "Connected"
-                      : "Connect"}
-                  </button>
-
-                </div>
-
-              </div>
-
-              {/* BALANCE */}
-
-              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3 mb-4">
-
-                <div className="flex justify-between">
-
-                  <span className="text-xs text-slate-400">
-                    Available balance
                   </span>
 
-                  <span className="text-xs font-bold text-yellow-400">
-                    {coins.toLocaleString()}
+
+                  <span className="
+                    text-xs
+                    font-bold
+                    text-emerald-400
+                  ">
+
+                    {currentProfile.wallet_address
+                      ? currentProfile.wallet_address
+                      : "Not Connected"}
+
                   </span>
 
                 </div>
 
+
+                <button
+                  onClick={
+                    handleConnectWallet
+                  }
+                  className="
+                    bg-indigo-600
+                    text-white
+                    px-3
+                    py-2
+                    rounded-xl
+                    text-xs
+                    font-bold
+                  "
+                >
+
+                  Connect
+
+                </button>
+
               </div>
+
 
               {/* FORM */}
 
               <form
-                onSubmit={handleWithdraw}
-                className="space-y-3"
+                onSubmit={
+                  handleWithdraw
+                }
+                className="
+                  space-y-3
+                "
               >
 
                 <input
                   type="number"
-                  min={MIN_WITHDRAW}
-                  value={withdrawAmount}
-                  onChange={(event) =>
+                  min={
+                    MIN_WITHDRAWAL
+                  }
+                  value={
+                    withdrawAmount
+                  }
+                  onChange={e =>
                     setWithdrawAmount(
-                      event.target.value
+                      e.target.value
                     )
                   }
-                  placeholder={`Min. ${MIN_WITHDRAW.toLocaleString()} AdCoins`}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-3 text-xs text-white outline-none focus:border-indigo-500"
+                  placeholder="75000 AdCoins"
+                  className="
+                    w-full
+                    bg-slate-950
+                    border
+                    border-slate-800
+                    rounded-xl
+                    px-3.5
+                    py-3
+                    text-xs
+                    text-white
+                    outline-none
+                  "
                 />
+
 
                 <button
                   type="submit"
-                  disabled={isSubmittingWithdraw}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center space-x-2"
+                  disabled={
+                    actionLoading
+                  }
+                  className="
+                    w-full
+                    bg-emerald-600
+                    hover:bg-emerald-500
+                    text-white
+                    font-bold
+                    py-3
+                    rounded-xl
+                    text-xs
+                    flex
+                    items-center
+                    justify-center
+                    gap-2
+                    disabled:opacity-50
+                  "
                 >
 
-                  <span>
-                    {isSubmittingWithdraw
-                      ? "Processing..."
-                      : "Request Withdrawal"}
-                  </span>
+                  {actionLoading
+                    ? "Processing..."
+                    : "Request Withdrawal"}
 
-                  <ArrowUpRight className="w-4 h-4" />
+                  <ArrowUpRight className="
+                    w-4
+                    h-4
+                  " />
 
                 </button>
 
               </form>
 
-              <div className="mt-4 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10">
+            </div>
 
-                <p className="text-[10px] text-slate-400 leading-relaxed">
-                  Withdrawals are subject to account,
-                  reward and wallet verification.
+
+            {/* BALANCE */}
+
+            <div className="
+              bg-slate-900
+              border
+              border-slate-800
+              rounded-2xl
+              p-4
+            ">
+
+              <p className="
+                text-xs
+                text-slate-400
+              ">
+
+                Available balance
+
+              </p>
+
+
+              <p className="
+                text-2xl
+                font-black
+                text-yellow-400
+                mt-1
+              ">
+
+                {formatCoins(
+                  currentProfile.coins
+                )}
+
+                {" "}
+                <span className="
+                  text-xs
+                  font-normal
+                ">
+
+                  AdCoins
+
+                </span>
+
+              </p>
+
+            </div>
+
+          </div>
+
+        )}
+
+
+        {/* ===============================================
+            FRIENDS
+        =============================================== */}
+
+        {activeTab === "friends" && (
+
+          <div className="
+            space-y-4
+          ">
+
+
+            <div className="
+              bg-slate-900
+              border
+              border-slate-800
+              rounded-3xl
+              p-5
+              text-center
+            ">
+
+              <div className="
+                w-14
+                h-14
+                rounded-2xl
+                bg-indigo-500/10
+                border
+                border-indigo-500/20
+                flex
+                items-center
+                justify-center
+                mx-auto
+                mb-3
+              ">
+
+                <Users className="
+                  w-7
+                  h-7
+                  text-indigo-400
+                " />
+
+              </div>
+
+
+              <h2 className="
+                text-lg
+                font-bold
+                text-white
+              ">
+
+                Referral Program
+
+              </h2>
+
+
+              <p className="
+                text-xs
+                text-slate-400
+                mt-1
+                mb-5
+              ">
+
+                Fto shokët dhe fito
+                {" "}
+                <strong>
+                  1,000 AdCoins
+                </strong>
+                {" "}
+                për çdo referral.
+
+              </p>
+
+
+              <div className="
+                bg-slate-950
+                border
+                border-slate-800
+                rounded-xl
+                p-3
+                text-left
+                mb-3
+              ">
+
+                <p className="
+                  text-[10px]
+                  text-slate-500
+                  mb-1
+                ">
+
+                  YOUR REFERRAL LINK
+
+                </p>
+
+
+                <p className="
+                  text-[11px]
+                  text-indigo-300
+                  break-all
+                ">
+
+                  {referralLink ||
+                    "Open inside Telegram"}
+
+                </p>
+
+              </div>
+
+
+              <button
+                onClick={
+                  handleCopyReferral
+                }
+                className="
+                  w-full
+                  bg-indigo-600
+                  hover:bg-indigo-500
+                  text-white
+                  font-bold
+                  py-3
+                  rounded-2xl
+                  text-xs
+                  flex
+                  items-center
+                  justify-center
+                  space-x-2
+                "
+              >
+
+                {copiedRef ? (
+                  <CheckCircle2 className="
+                    w-4
+                    h-4
+                  " />
+                ) : (
+                  <Copy className="
+                    w-4
+                    h-4
+                  " />
+                )}
+
+
+                <span>
+
+                  {copiedRef
+                    ? "Copied!"
+                    : "Copy Referral Link"}
+
+                </span>
+
+              </button>
+
+            </div>
+
+
+            <div className="
+              bg-slate-900/80
+              border
+              border-slate-800
+              rounded-2xl
+              p-4
+            ">
+
+              <h3 className="
+                text-sm
+                font-bold
+                text-white
+                mb-2
+              ">
+
+                How Referral Works
+
+              </h3>
+
+
+              <div className="
+                space-y-2
+                text-xs
+                text-slate-400
+              ">
+
+                <p>
+                  1. Copy your referral link.
+                </p>
+
+                <p>
+                  2. Send it to your friend.
+                </p>
+
+                <p>
+                  3. Your friend opens the bot.
+                </p>
+
+                <p>
+                  4. Referral is registered.
+                </p>
+
+                <p>
+                  5. Reward is processed by Supabase.
                 </p>
 
               </div>
@@ -1211,173 +3123,125 @@ export default function App() {
 
         )}
 
-        {/* =================================================
-            FRIENDS
-        ================================================= */}
 
-        {activeTab === "friends" && (
-
-          <div className="space-y-4">
-
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 text-center">
-
-              <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-indigo-500/10 flex items-center justify-center">
-
-                <Users className="w-7 h-7 text-indigo-400" />
-
-              </div>
-
-              <h2 className="text-lg font-bold text-white mb-1.5">
-                Referral Program
-              </h2>
-
-              <p className="text-xs text-slate-400 mb-5">
-                Earn{" "}
-                {REFERRAL_REWARD.toLocaleString()}{" "}
-                AdCoins for every invited friend!
-              </p>
-
-              <button
-                onClick={handleCopyRef}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-2xl text-xs flex items-center justify-center space-x-2"
-              >
-
-                {copiedRef ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-                ) : (
-                  <Copy className="w-4 h-4" />
-                )}
-
-                <span>
-                  {copiedRef
-                    ? "Copied!"
-                    : "Copy Referral Link"}
-                </span>
-
-              </button>
-
-            </div>
-
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">
-                Your Telegram ID
-              </p>
-
-              <p className="text-xs text-slate-300 font-mono break-all">
-                {telegramUserId}
-              </p>
-
-            </div>
-
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">
-                Referral link
-              </p>
-
-              <p className="text-[10px] text-slate-400 break-all">
-                {referralLink}
-              </p>
-
-            </div>
-
-          </div>
-
-        )}
-
-        {/* =================================================
+        {/* ===============================================
             RANKING
-        ================================================= */}
+        =============================================== */}
 
         {activeTab === "ranking" && (
 
-          <div className="space-y-3">
+          <div className="
+            space-y-3
+          ">
 
-            <div className="flex items-center gap-2">
 
-              <Trophy className="w-5 h-5 text-yellow-400" />
+            <h2 className="
+              text-lg
+              font-bold
+              text-white
+            ">
 
-              <h2 className="text-lg font-bold text-white">
-                Global Leaderboard
-              </h2>
+              Global Leaderboard
 
-            </div>
+            </h2>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex justify-between items-center">
 
-              <div className="flex items-center gap-3">
+            {leaderboard.length === 0 ? (
 
-                <span className="text-lg">
-                  👑
-                </span>
+              <div className="
+                bg-slate-900
+                border
+                border-slate-800
+                rounded-2xl
+                p-5
+                text-center
+                text-xs
+                text-slate-500
+              ">
 
-                <div>
-
-                  <span className="block text-xs font-bold text-white">
-                    {telegramUsername}
-                  </span>
-
-                  <span className="text-[10px] text-slate-500">
-                    Your account
-                  </span>
-
-                </div>
-
-              </div>
-
-              <span className="text-xs font-extrabold text-yellow-400">
-                {coins.toLocaleString()}
-              </span>
-
-            </div>
-
-            {[
-
-              {
-                rank: 1,
-                name: "Top Publisher",
-                coins: 250000,
-              },
-
-              {
-                rank: 2,
-                name: "AdDev Player",
-                coins: 198500,
-              },
-
-              {
-                rank: 3,
-                name: "Rewards Master",
-                coins: 175300,
-              },
-
-            ].map((player) => (
-
-              <div
-                key={player.rank}
-                className="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex justify-between items-center"
-              >
-
-                <div className="flex items-center gap-3">
-
-                  <span className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold">
-                    {player.rank}
-                  </span>
-
-                  <span className="text-xs font-bold text-white">
-                    {player.name}
-                  </span>
-
-                </div>
-
-                <span className="text-xs font-extrabold text-yellow-400">
-                  {player.coins.toLocaleString()}
-                </span>
+                Leaderboard do të shfaqet
+                pasi të lidhet Supabase.
 
               </div>
 
-            ))}
+            ) : (
+
+              leaderboard.map(
+                (
+                  player,
+                  index
+                ) => (
+
+                  <div
+                    key={
+                      player.telegram_id
+                    }
+                    className="
+                      bg-slate-900
+                      border
+                      border-slate-800
+                      rounded-2xl
+                      p-3
+                      flex
+                      justify-between
+                      items-center
+                    "
+                  >
+
+                    <div className="
+                      flex
+                      items-center
+                      gap-3
+                    ">
+
+                      <span className="
+                        text-xs
+                        font-bold
+                        text-slate-500
+                        w-5
+                      ">
+
+                        #{index + 1}
+
+                      </span>
+
+
+                      <span className="
+                        text-xs
+                        font-bold
+                        text-white
+                      ">
+
+                        {player.first_name ||
+                          player.username ||
+                          "Player"}
+
+                      </span>
+
+                    </div>
+
+
+                    <span className="
+                      text-xs
+                      font-extrabold
+                      text-yellow-400
+                    ">
+
+                      {formatCoins(
+                        player.coins
+                      )}
+
+                      {" "}
+                      AdCoins
+
+                    </span>
+
+                  </div>
+
+                )
+              )
+
+            )}
 
           </div>
 
@@ -1385,77 +3249,148 @@ export default function App() {
 
       </main>
 
-      {/* ===================================================
-          CPX MODAL
-      =================================================== */}
 
-      {showOfferwallModal && (
+      {/* =================================================
+          OFFERWALL MODAL
+      ================================================= */}
 
-        <div className="absolute inset-0 bg-slate-950/95 z-50 flex flex-col p-4">
+      {showOfferwall && (
 
-          <div className="flex justify-between items-center mb-3">
+        <div className="
+          absolute
+          inset-0
+          bg-slate-950
+          z-50
+          flex
+          flex-col
+          p-4
+        ">
 
-            <div className="flex items-center gap-2">
 
-              <BarChart3 className="w-5 h-5 text-purple-400" />
+          <div className="
+            flex
+            justify-between
+            items-center
+            mb-3
+          ">
 
-              <h3 className="text-sm font-bold text-white">
-                CPX Research
-              </h3>
+            <h3 className="
+              text-sm
+              font-bold
+              text-white
+            ">
 
-            </div>
+              CPX Research
+
+            </h3>
+
 
             <button
               onClick={() =>
-                setShowOfferwallModal(false)
+                setShowOfferwall(
+                  false
+                )
               }
-              className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-slate-300"
+              className="
+                text-slate-300
+              "
             >
-              <X className="w-4 h-4" />
+
+              <X className="
+                w-5
+                h-5
+              " />
+
             </button>
 
           </div>
 
-          <div className="flex-1 bg-slate-900 border border-slate-800 rounded-3xl p-5 flex flex-col items-center justify-center text-center">
 
-            <BarChart3 className="w-12 h-12 text-purple-400 mb-4" />
+          <div className="
+            flex-1
+            bg-slate-900
+            border
+            border-slate-800
+            rounded-3xl
+            p-4
+            flex
+            flex-col
+            items-center
+            justify-center
+            text-center
+          ">
 
-            <h4 className="text-base font-bold text-white mb-2">
-              Complete Surveys
-            </h4>
+            <div className="
+              w-14
+              h-14
+              rounded-2xl
+              bg-purple-500/10
+              flex
+              items-center
+              justify-center
+              mb-4
+            ">
 
-            <p className="text-xs text-slate-400 mb-5">
-              Complete available surveys and earn rewards.
+              <CheckSquare className="
+                w-7
+                h-7
+                text-purple-400
+              " />
+
+            </div>
+
+
+            <h3 className="
+              text-white
+              font-bold
+              mb-2
+            ">
+
+              Earn AdCoins
+
+            </h3>
+
+
+            <p className="
+              text-xs
+              text-slate-400
+              mb-5
+              max-w-xs
+            ">
+
+              Complete surveys and offers
+              to earn rewards.
+
             </p>
 
-            <button
-              onClick={() => {
-                if (
-                  window.Telegram?.WebApp?.openLink
-                ) {
-                  window.Telegram.WebApp.openLink(
-                    cpxOfferwallUrl
-                  );
-                } else {
-                  window.open(
-                    cpxOfferwallUrl,
-                    "_blank",
-                    "noopener,noreferrer"
-                  );
-                }
-              }}
-              className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 px-5 rounded-2xl text-xs flex items-center gap-2"
+
+            <a
+              href={
+                cpxOfferwallUrl
+              }
+              target="_blank"
+              rel="noreferrer"
+              className="
+                bg-purple-600
+                hover:bg-purple-500
+                text-white
+                font-bold
+                py-3
+                px-5
+                rounded-2xl
+                text-xs
+              "
             >
 
-              Open Offerwall
+              Open CPX Surveys
+              {" "}
+              <ExternalLink className="
+                inline
+                w-3
+                h-3
+              " />
 
-              <ExternalLink className="w-4 h-4" />
-
-            </button>
-
-            <p className="text-[9px] text-slate-600 mt-4 break-all">
-              User ID: {telegramUserId}
-            </p>
+            </a>
 
           </div>
 
@@ -1463,78 +3398,389 @@ export default function App() {
 
       )}
 
-      {/* ===================================================
-          BOTTOM NAVIGATION
-      =================================================== */}
 
-      <nav className="absolute bottom-0 left-0 right-0 bg-slate-900/95 border-t border-slate-800 px-2 py-1.5 z-20 flex justify-around">
+      {/* =================================================
+          WITHDRAW HISTORY
+      ================================================= */}
+
+      {showHistory && (
+
+        <div className="
+          absolute
+          inset-0
+          bg-slate-950
+          z-50
+          flex
+          flex-col
+          p-4
+        ">
+
+
+          <div className="
+            flex
+            justify-between
+            items-center
+            mb-4
+          ">
+
+            <h3 className="
+              text-lg
+              font-bold
+              text-white
+            ">
+
+              Withdrawal History
+
+            </h3>
+
+
+            <button
+              onClick={() =>
+                setShowHistory(
+                  false
+                )
+              }
+            >
+
+              <X className="
+                w-5
+                h-5
+                text-slate-300
+              " />
+
+            </button>
+
+          </div>
+
+
+          <div className="
+            flex-1
+            overflow-y-auto
+            space-y-2
+          ">
+
+
+            {withdrawals.length === 0 ? (
+
+              <div className="
+                bg-slate-900
+                border
+                border-slate-800
+                rounded-2xl
+                p-5
+                text-center
+                text-xs
+                text-slate-500
+              ">
+
+                No withdrawal requests yet.
+
+              </div>
+
+            ) : (
+
+              withdrawals.map(
+                item => (
+
+                  <div
+                    key={
+                      item.id
+                    }
+                    className="
+                      bg-slate-900
+                      border
+                      border-slate-800
+                      rounded-2xl
+                      p-3
+                    "
+                  >
+
+                    <div className="
+                      flex
+                      justify-between
+                      items-center
+                    ">
+
+                      <span className="
+                        text-xs
+                        font-bold
+                        text-yellow-400
+                      ">
+
+                        {formatCoins(
+                          item.amount
+                        )}
+                        {" "}
+                        AdCoins
+
+                      </span>
+
+
+                      <span className="
+                        text-[10px]
+                        uppercase
+                        text-slate-400
+                      ">
+
+                        {item.status}
+
+                      </span>
+
+                    </div>
+
+
+                    <p className="
+                      text-[10px]
+                      text-slate-500
+                      mt-1
+                    ">
+
+                      {formatDate(
+                        item.created_at
+                      )}
+
+                    </p>
+
+                  </div>
+
+                )
+              )
+
+            )}
+
+          </div>
+
+        </div>
+
+      )}
+
+
+      {/* =================================================
+          NOTICE MODAL
+      ================================================= */}
+
+      {notice && (
+
+        <div className="
+          absolute
+          inset-0
+          bg-black/60
+          z-[100]
+          flex
+          items-center
+          justify-center
+          p-5
+        ">
+
+          <div className="
+            w-full
+            max-w-sm
+            bg-slate-900
+            border
+            border-slate-700
+            rounded-3xl
+            p-5
+            shadow-2xl
+          ">
+
+            <div className="
+              flex
+              justify-between
+              items-start
+              gap-3
+            ">
+
+              <div>
+
+                <h3 className="
+                  text-lg
+                  font-bold
+                  text-white
+                ">
+
+                  {notice.title}
+
+                </h3>
+
+
+                <p className="
+                  text-sm
+                  text-slate-300
+                  mt-2
+                  leading-6
+                ">
+
+                  {notice.message}
+
+                </p>
+
+              </div>
+
+
+              <button
+                onClick={() =>
+                  setNotice(
+                    null
+                  )
+                }
+              >
+
+                <X className="
+                  w-5
+                  h-5
+                  text-slate-400
+                " />
+
+              </button>
+
+            </div>
+
+
+            <button
+              onClick={() =>
+                setNotice(
+                  null
+                )
+              }
+              className="
+                w-full
+                mt-5
+                bg-indigo-600
+                hover:bg-indigo-500
+                text-white
+                font-bold
+                py-3
+                rounded-xl
+                text-sm
+              "
+            >
+
+              OK
+
+            </button>
+
+          </div>
+
+        </div>
+
+      )}
+
+
+      {/* =================================================
+          BOTTOM NAVIGATION
+      ================================================= */}
+
+      <nav className="
+        absolute
+        bottom-0
+        left-0
+        right-0
+        bg-slate-900/95
+        border-t
+        border-slate-800
+        px-2
+        py-1.5
+        z-20
+        flex
+        justify-around
+      ">
+
 
         {[
           {
-            id: "home",
+            id: "home" as Tab,
             label: "Home",
             icon: Home,
           },
 
           {
-            id: "tasks",
+            id: "tasks" as Tab,
             label: "Tasks",
             icon: CheckSquare,
           },
 
           {
-            id: "withdraw",
+            id: "withdraw" as Tab,
             label: "Withdraw",
             icon: Wallet,
           },
 
           {
-            id: "friends",
+            id: "friends" as Tab,
             label: "Friends",
             icon: Users,
           },
 
           {
-            id: "ranking",
+            id: "ranking" as Tab,
             label: "Ranking",
             icon: Trophy,
           },
 
-        ].map((tab) => {
+        ].map(
+          tab => {
 
-          const Icon = tab.icon;
+            const Icon =
+              tab.icon;
 
-          const isActive =
-            activeTab === tab.id;
+            const active =
+              activeTab ===
+              tab.id;
 
-          return (
 
-            <button
-              key={tab.id}
-              onClick={() =>
-                setActiveTab(tab.id)
-              }
-              className={`flex flex-col items-center py-1 px-3 rounded-2xl transition-all ${
-                isActive
-                  ? "text-indigo-400 bg-indigo-500/10"
-                  : "text-slate-400"
-              }`}
-            >
+            return (
 
-              <Icon className="w-5 h-5" />
+              <button
+                key={
+                  tab.id
+                }
+                onClick={() =>
+                  setActiveTab(
+                    tab.id
+                  )
+                }
+                className={`
+                  flex
+                  flex-col
+                  items-center
+                  py-1
+                  px-3
+                  rounded-2xl
+                  ${
+                    active
+                      ? "text-indigo-400 bg-indigo-500/10"
+                      : "text-slate-400"
+                  }
+                `}
+              >
 
-              <span className="text-[10px] font-semibold mt-0.5">
-                {tab.label}
-              </span>
+                <Icon className="
+                  w-5
+                  h-5
+                " />
 
-            </button>
 
-          );
+                <span className="
+                  text-[10px]
+                  font-semibold
+                  mt-0.5
+                ">
 
-        })}
+                  {tab.label}
+
+                </span>
+
+              </button>
+
+            );
+
+          }
+        )}
 
       </nav>
 
     </div>
+
   );
+
 }
