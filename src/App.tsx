@@ -16,32 +16,80 @@ import {
   CheckCircle2,
   Star,
   Cpu,
-  Gift,
+  Zap,
   X,
   RefreshCw,
-  Info,
-  Zap,
-  Clock3,
+  Gift,
+  BarChart3,
 } from "lucide-react";
 
 /* =========================================================
-   TYPES
+   TELEGRAM TYPES
 ========================================================= */
 
-type Tab = "home" | "tasks" | "withdraw" | "friends" | "ranking";
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp?: {
+        initData?: string;
+        initDataUnsafe?: {
+          user?: {
+            id?: number;
+            first_name?: string;
+            last_name?: string;
+            username?: string;
+            language_code?: string;
+          };
+          start_param?: string;
+        };
+        ready?: () => void;
+        expand?: () => void;
+        disableVerticalSwipes?: () => void;
+        openLink?: (url: string) => void;
+        openTelegramLink?: (url: string) => void;
+        openInvoice?: (
+          url: string,
+          callback?: (status: string) => void
+        ) => void;
+        showPopup?: (
+          params: {
+            title?: string;
+            message: string;
+            buttons?: Array<{
+              id: string;
+              type?: string;
+              text?: string;
+            }>;
+          },
+          callback?: (id: string) => void
+        ) => void;
+        HapticFeedback?: {
+          impactOccurred?: (
+            style: "light" | "medium" | "heavy" | "rigid" | "soft"
+          ) => void;
+          notificationOccurred?: (
+            type: "error" | "success" | "warning"
+          ) => void;
+        };
+      };
+    };
 
-type NoticeType = "success" | "error" | "info";
-
-interface Notice {
-  type: NoticeType;
-  title: string;
-  message: string;
+    Adsgram?: {
+      init: (config: {
+        blockId: string;
+        debug?: boolean;
+      }) => {
+        show: () => Promise<void>;
+      };
+    };
+  }
 }
 
 /* =========================================================
-   CONFIG
-   Nuk ka lidhje me AdDev Studio website.
+   CONSTANTS
 ========================================================= */
+
+const APP_NAME = "AdDev Rewards";
 
 const ADSGRAM_BLOCK_ID = "44129";
 
@@ -55,48 +103,30 @@ const ENERGY_REGEN_MS = 1500;
 
 const MINING_INTERVAL_MS = 2000;
 
-const MINING_CAP = 1000;
+const TAP_REWARD = 1;
+
+const AD_REWARD = 250;
+
+const REFERRAL_REWARD = 1000;
 
 /* =========================================================
-   TELEGRAM HELPERS
+   STORAGE
 ========================================================= */
 
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp?: {
-        ready?: () => void;
-        expand?: () => void;
-        close?: () => void;
-        openLink?: (url: string) => void;
-        openInvoice?: (
-          url: string,
-          callback?: (status: string) => void
-        ) => void;
-        initData?: string;
-        initDataUnsafe?: {
-          user?: {
-            id?: number;
-            username?: string;
-            first_name?: string;
-          };
-        };
-      };
-    };
-
-    Adsgram?: {
-      init: (options: { blockId: string }) => {
-        show: () => Promise<void>;
-      };
-    };
-  }
-}
+const STORAGE_KEYS = {
+  coins: "addev_coins",
+  energy: "addev_energy",
+  minedCoins: "addev_mined_coins",
+  streak: "addev_streak",
+  wallet: "addev_wallet",
+  lastOpen: "addev_last_open",
+};
 
 /* =========================================================
-   LOCAL STORAGE
+   HELPERS
 ========================================================= */
 
-function getNumber(key: string, fallback: number) {
+function readNumber(key: string, fallback: number): number {
   try {
     const value = localStorage.getItem(key);
 
@@ -104,15 +134,15 @@ function getNumber(key: string, fallback: number) {
       return fallback;
     }
 
-    const number = Number(value);
+    const parsed = Number(value);
 
-    return Number.isFinite(number) ? number : fallback;
+    return Number.isFinite(parsed) ? parsed : fallback;
   } catch {
     return fallback;
   }
 }
 
-function getString(key: string, fallback: string) {
+function readString(key: string, fallback = ""): string {
   try {
     return localStorage.getItem(key) || fallback;
   } catch {
@@ -120,12 +150,34 @@ function getString(key: string, fallback: string) {
   }
 }
 
-function save(key: string, value: string | number) {
+function saveValue(key: string, value: string | number) {
   try {
     localStorage.setItem(key, String(value));
   } catch {
-    // Storage may be unavailable in some environments.
+    // Ignore storage errors.
   }
+}
+
+/* =========================================================
+   TELEGRAM USER
+========================================================= */
+
+function getTelegramUser() {
+  return window.Telegram?.WebApp?.initDataUnsafe?.user;
+}
+
+function getTelegramUserId(): string {
+  const telegramId = getTelegramUser()?.id;
+
+  if (telegramId) {
+    return String(telegramId);
+  }
+
+  /*
+   * Development fallback only.
+   * This is NOT a random ID.
+   */
+  return "demo_user";
 }
 
 /* =========================================================
@@ -137,102 +189,81 @@ export default function App() {
      Telegram
   ------------------------------------------------------- */
 
-  const telegramUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+  const telegramUser = getTelegramUser();
 
-  const telegramUserId =
-    telegramUser?.id?.toString() ||
-    getString("addev_user_id", "local_user");
+  const telegramUserId = getTelegramUserId();
+
+  const telegramUsername =
+    telegramUser?.username ||
+    telegramUser?.first_name ||
+    "Telegram User";
 
   /* -------------------------------------------------------
      Main state
   ------------------------------------------------------- */
 
   const [coins, setCoins] = useState<number>(() =>
-    getNumber("addev_coins", 15432)
+    readNumber(STORAGE_KEYS.coins, 15432)
   );
 
   const [energy, setEnergy] = useState<number>(() =>
-    getNumber("addev_energy", 1000)
+    readNumber(STORAGE_KEYS.energy, MAX_ENERGY)
   );
 
   const [minedCoins, setMinedCoins] = useState<number>(() =>
-    getNumber("addev_mined", 0)
+    readNumber(STORAGE_KEYS.minedCoins, 0)
   );
-
-  const [activeTab, setActiveTab] = useState<Tab>("home");
 
   const [dailyStreak] = useState<number>(() =>
-    getNumber("addev_streak", 6)
+    readNumber(STORAGE_KEYS.streak, 6)
   );
 
-  const [showOfferwall, setShowOfferwall] = useState(false);
-
-  const [showInfo, setShowInfo] = useState(false);
-
-  const [isWatchingAd, setIsWatchingAd] = useState(false);
-
-  const [connectedWallet, setConnectedWallet] = useState(() =>
-    getString("addev_wallet", "")
+  const [connectedWallet, setConnectedWallet] = useState<string>(() =>
+    readString(STORAGE_KEYS.wallet, "")
   );
 
-  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [activeTab, setActiveTab] = useState<string>("home");
+
+  const [showOfferwallModal, setShowOfferwallModal] =
+    useState<boolean>(false);
+
+  const [isWatchingAd, setIsWatchingAd] =
+    useState<boolean>(false);
+
+  const [isConnectingWallet, setIsConnectingWallet] =
+    useState<boolean>(false);
+
+  const [withdrawAmount, setWithdrawAmount] =
+    useState<string>("");
 
   const [isSubmittingWithdraw, setIsSubmittingWithdraw] =
-    useState(false);
+    useState<boolean>(false);
 
-  const [copiedRef, setCopiedRef] = useState(false);
+  const [copiedRef, setCopiedRef] =
+    useState<boolean>(false);
 
-  const [notice, setNotice] = useState<Notice | null>(null);
-
-  const [tapAnimation, setTapAnimation] = useState<number | null>(null);
+  const [tapAnimation, setTapAnimation] =
+    useState<number>(0);
 
   /* -------------------------------------------------------
      Stable referral link
   ------------------------------------------------------- */
 
   const referralLink = useMemo(() => {
-    const existing = getString("addev_referral", "");
-
-    if (existing) {
-      return existing;
-    }
-
-    const newLink =
-      "https://t.me/AdDevRewardsBot?start=ref_" + telegramUserId;
-
-    save("addev_referral", newLink);
-
-    return newLink;
+    return `https://t.me/AdDevRewardsBot?start=ref_${telegramUserId}`;
   }, [telegramUserId]);
 
   /* -------------------------------------------------------
-     CPX URL
+     CPX Offerwall URL
   ------------------------------------------------------- */
 
-  const cpxOfferwallUrl =
-    `https://offers.cpx-research.com/index.php` +
-    `?app_id=${CPX_APP_ID}` +
-    `&ext_user_id=${encodeURIComponent(telegramUserId)}`;
-
-  /* =======================================================
-     NOTICE
-  ======================================================= */
-
-  const showNotice = (
-    type: NoticeType,
-    title: string,
-    message: string
-  ) => {
-    setNotice({
-      type,
-      title,
-      message,
-    });
-
-    window.setTimeout(() => {
-      setNotice(null);
-    }, 3500);
-  };
+  const cpxOfferwallUrl = useMemo(() => {
+    return (
+      `https://offers.cpx-research.com/index.php` +
+      `?app_id=${encodeURIComponent(CPX_APP_ID)}` +
+      `&ext_user_id=${encodeURIComponent(telegramUserId)}`
+    );
+  }, [telegramUserId]);
 
   /* =======================================================
      TELEGRAM INITIALIZATION
@@ -241,20 +272,25 @@ export default function App() {
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
 
-    if (tg) {
-      tg.ready?.();
-      tg.expand?.();
+    if (!tg) {
+      return;
     }
 
-    save("addev_user_id", telegramUserId);
-  }, [telegramUserId]);
+    try {
+      tg.ready?.();
+      tg.expand?.();
+      tg.disableVerticalSwipes?.();
+    } catch (error) {
+      console.log("Telegram WebApp initialization error:", error);
+    }
+  }, []);
 
   /* =======================================================
      SAVE COINS
   ======================================================= */
 
   useEffect(() => {
-    save("addev_coins", coins);
+    saveValue(STORAGE_KEYS.coins, coins);
   }, [coins]);
 
   /* =======================================================
@@ -262,7 +298,7 @@ export default function App() {
   ======================================================= */
 
   useEffect(() => {
-    save("addev_energy", energy);
+    saveValue(STORAGE_KEYS.energy, energy);
   }, [energy]);
 
   /* =======================================================
@@ -270,8 +306,16 @@ export default function App() {
   ======================================================= */
 
   useEffect(() => {
-    save("addev_mined", minedCoins);
+    saveValue(STORAGE_KEYS.minedCoins, minedCoins);
   }, [minedCoins]);
+
+  /* =======================================================
+     SAVE WALLET
+  ======================================================= */
+
+  useEffect(() => {
+    saveValue(STORAGE_KEYS.wallet, connectedWallet);
+  }, [connectedWallet]);
 
   /* =======================================================
      ENERGY REGENERATION
@@ -288,7 +332,9 @@ export default function App() {
       });
     }, ENERGY_REGEN_MS);
 
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+    };
   }, []);
 
   /* =======================================================
@@ -297,17 +343,29 @@ export default function App() {
 
   useEffect(() => {
     const miningTimer = window.setInterval(() => {
-      setMinedCoins((previous) => {
-        if (previous >= MINING_CAP) {
-          return previous;
-        }
-
-        return previous + 1;
-      });
+      setMinedCoins((previous) => previous + 1);
     }, MINING_INTERVAL_MS);
 
-    return () => window.clearInterval(miningTimer);
+    return () => {
+      window.clearInterval(miningTimer);
+    };
   }, []);
+
+  /* =======================================================
+     HAPTIC
+  ======================================================= */
+
+  const haptic = (
+    type: "light" | "medium" | "heavy" = "light"
+  ) => {
+    try {
+      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(
+        type
+      );
+    } catch {
+      // Ignore haptic errors.
+    }
+  };
 
   /* =======================================================
      TAP / PLAY
@@ -317,28 +375,58 @@ export default function App() {
     event: React.MouseEvent<HTMLDivElement>
   ) => {
     if (energy <= 0) {
-      showNotice(
-        "info",
-        "Energy empty",
-        "Wait a little while for your energy to regenerate."
-      );
-
+      haptic("heavy");
       return;
     }
 
-    setCoins((previous) => previous + 1);
+    setCoins((previous) => previous + TAP_REWARD);
 
     setEnergy((previous) =>
       Math.max(previous - 1, 0)
     );
 
-    const id = Date.now();
+    setTapAnimation((previous) => previous + 1);
 
-    setTapAnimation(id);
+    haptic("light");
+
+    const target = event.currentTarget;
+
+    const rect = target.getBoundingClientRect();
+
+    const x = event.clientX - rect.left;
+
+    const y = event.clientY - rect.top;
+
+    const floatingElement =
+      document.createElement("div");
+
+    floatingElement.className =
+      "absolute text-yellow-400 font-extrabold text-lg pointer-events-none z-30";
+
+    floatingElement.style.left = `${x}px`;
+
+    floatingElement.style.top = `${y}px`;
+
+    floatingElement.style.transform =
+      "translate(-50%, -50%)";
+
+    floatingElement.style.transition =
+      "all 700ms ease-out";
+
+    floatingElement.innerText = "+1";
+
+    target.appendChild(floatingElement);
+
+    requestAnimationFrame(() => {
+      floatingElement.style.transform =
+        "translate(-50%, -100px)";
+
+      floatingElement.style.opacity = "0";
+    });
 
     window.setTimeout(() => {
-      setTapAnimation(null);
-    }, 500);
+      floatingElement.remove();
+    }, 750);
   };
 
   /* =======================================================
@@ -353,10 +441,8 @@ export default function App() {
     const adsgram = window.Adsgram;
 
     if (!adsgram) {
-      showNotice(
-        "error",
-        "Ads unavailable",
-        "Adsgram is not available. Open the Mini App inside Telegram."
+      alert(
+        "Adsgram is not available. Please open AdDev Rewards inside Telegram."
       );
 
       return;
@@ -364,31 +450,39 @@ export default function App() {
 
     setIsWatchingAd(true);
 
+    haptic("medium");
+
     try {
       const controller = adsgram.init({
         blockId: ADSGRAM_BLOCK_ID,
+        debug: false,
       });
 
       await controller.show();
 
-      /*
-       * Reward ONLY after the ad promise succeeds.
-       */
+      setCoins((previous) =>
+        previous + AD_REWARD
+      );
 
-      setCoins((previous) => previous + 250);
+      try {
+        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.(
+          "success"
+        );
+      } catch {
+        // Ignore.
+      }
 
-      showNotice(
-        "success",
-        "Reward received",
-        "+250 AdCoins have been added to your balance."
+      alert(
+        `Congratulations! +${AD_REWARD} AdCoins`
       );
     } catch (error) {
-      console.log("Adsgram error:", error);
+      console.log(
+        "Adsgram ad failed or was closed:",
+        error
+      );
 
-      showNotice(
-        "error",
-        "Ad unavailable",
-        "The advertisement was skipped, closed, or the Adsgram block is not active."
+      alert(
+        "The ad was skipped, closed, or is currently unavailable."
       );
     } finally {
       setIsWatchingAd(false);
@@ -401,111 +495,49 @@ export default function App() {
 
   const handleClaimMined = () => {
     if (minedCoins <= 0) {
-      showNotice(
-        "info",
-        "Nothing to claim",
-        "Cloud Mining has not generated any new AdCoins yet."
-      );
-
+      alert("No mined AdCoins available yet.");
       return;
     }
 
     const amount = minedCoins;
 
-    setCoins((previous) => previous + amount);
+    setCoins((previous) =>
+      previous + amount
+    );
 
     setMinedCoins(0);
 
-    showNotice(
-      "success",
-      "Mining claimed",
-      `+${amount.toLocaleString()} AdCoins added to your balance.`
-    );
-  };
+    haptic("medium");
 
-  /* =======================================================
-     ENERGY BONUS
-  ======================================================= */
-
-  const handleEnergyBonus = () => {
-    if (energy >= MAX_ENERGY) {
-      showNotice(
-        "info",
-        "Energy already full",
-        "Your energy is already at 1000 / 1000."
-      );
-
-      return;
-    }
-
-    setEnergy(MAX_ENERGY);
-
-    showNotice(
-      "success",
-      "Energy restored",
-      "Your energy has been restored to 1000."
-    );
-  };
-
-  /* =======================================================
-     TELEGRAM STARS
-     
-     Real Telegram Stars purchases require an invoice
-     generated by the Telegram Bot/backend.
-  ======================================================= */
-
-  const handleBuyWithStars = (
-    packageName: string,
-    starCost: number
-  ) => {
-    /*
-     * Front-end only version.
-     *
-     * Do NOT pretend that this is a real payment.
-     * A real invoice URL must be generated by the bot/backend.
-     */
-
-    showNotice(
-      "info",
-      "Telegram Stars",
-      `${packageName} costs ${starCost} Stars. A real purchase invoice must be supplied by the Telegram bot.`
+    alert(
+      `You collected ${amount.toLocaleString()} mined AdCoins.`
     );
   };
 
   /* =======================================================
      WALLET
-     
-     This does NOT fake a real blockchain connection.
   ======================================================= */
 
-  const handleConnectWallet = () => {
+  const handleConnectWallet = async () => {
     if (connectedWallet) {
-      showNotice(
-        "info",
-        "Wallet connected",
-        connectedWallet
-      );
-
       return;
     }
 
-    /*
-     * Placeholder connection state.
-     *
-     * Real TON Connect should be added separately.
-     */
+    setIsConnectingWallet(true);
 
-    const demoWallet = "TON Wallet";
+    haptic("medium");
 
-    setConnectedWallet(demoWallet);
+    window.setTimeout(() => {
+      const demoWallet = "EQD4...9xK2";
 
-    save("addev_wallet", demoWallet);
+      setConnectedWallet(demoWallet);
 
-    showNotice(
-      "info",
-      "Wallet ready",
-      "TON Connect should be used here for a real wallet connection."
-    );
+      setIsConnectingWallet(false);
+
+      alert(
+        "Wallet connection prepared. Real TON verification requires backend integration."
+      );
+    }, 700);
   };
 
   /* =======================================================
@@ -520,40 +552,35 @@ export default function App() {
     const amount = Number(withdrawAmount);
 
     if (!connectedWallet) {
-      showNotice(
-        "error",
-        "Wallet required",
-        "Connect your TON wallet before requesting a withdrawal."
+      alert(
+        "Please connect your TON Wallet first."
       );
 
       return;
     }
 
-    if (!Number.isFinite(amount)) {
-      showNotice(
-        "error",
-        "Invalid amount",
-        "Enter a valid AdCoins amount."
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      alert(
+        "Please enter a valid withdrawal amount."
       );
 
       return;
     }
 
     if (amount < MIN_WITHDRAW) {
-      showNotice(
-        "error",
-        "Minimum payout",
-        `You need at least ${MIN_WITHDRAW.toLocaleString()} AdCoins.`
+      alert(
+        `Minimum withdrawal is ${MIN_WITHDRAW.toLocaleString()} AdCoins.`
       );
 
       return;
     }
 
     if (amount > coins) {
-      showNotice(
-        "error",
-        "Insufficient balance",
-        "You do not have enough AdCoins for this withdrawal."
+      alert(
+        "You do not have enough AdCoins."
       );
 
       return;
@@ -561,27 +588,21 @@ export default function App() {
 
     setIsSubmittingWithdraw(true);
 
-    /*
-     * Front-end simulation only.
-     *
-     * Real withdrawal must be validated server-side.
-     */
-
     window.setTimeout(() => {
       setCoins((previous) =>
-        Math.max(previous - amount, 0)
+        previous - amount
       );
 
       setWithdrawAmount("");
 
       setIsSubmittingWithdraw(false);
 
-      showNotice(
-        "success",
-        "Request created",
-        `Withdrawal request for ${amount.toLocaleString()} AdCoins was created locally.`
+      haptic("medium");
+
+      alert(
+        "Withdrawal request created. Production payout requires backend verification."
       );
-    }, 900);
+    }, 1000);
   };
 
   /* =======================================================
@@ -596,871 +617,577 @@ export default function App() {
 
       setCopiedRef(true);
 
+      haptic("light");
+
       window.setTimeout(() => {
         setCopiedRef(false);
       }, 2000);
-
-      showNotice(
-        "success",
-        "Referral copied",
-        "Your referral link has been copied."
-      );
     } catch {
-      showNotice(
-        "error",
-        "Copy failed",
-        "Telegram/browser did not allow copying the link."
+      alert(
+        "Could not copy the referral link."
       );
     }
   };
 
   /* =======================================================
-     OPEN CPX
+     TELEGRAM STARS REAL PURCHASE
   ======================================================= */
 
-  const openCPX = () => {
+  const handleBuyWithStarsReal = async (
+    packageType: string,
+    starCost: number,
+    amountToAdd: number
+  ) => {
     const tg = window.Telegram?.WebApp;
 
-    if (tg?.openLink) {
-      tg.openLink(cpxOfferwallUrl);
-      return;
-    }
+    try {
+      const response = await fetch("/api/create-invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: telegramUserId,
+          packageType,
+          starCost,
+          amountToAdd,
+        }),
+      });
 
-    window.open(
-      cpxOfferwallUrl,
-      "_blank",
-      "noopener,noreferrer"
-    );
+      const data = await response.json();
+      if (!data.invoiceLink) {
+        throw new Error(data.error || "Nuk u gjenerua linku i faturës");
+      }
+
+      if (tg && tg.openInvoice) {
+        tg.openInvoice(data.invoiceLink, async (status: string) => {
+          if (status === "paid") {
+            if (amountToAdd > 0) {
+              setCoins((previous) => previous + amountToAdd);
+            } else {
+              setEnergy(MAX_ENERGY);
+            }
+            haptic("medium");
+            alert(
+              `Pagesa u krye me sukses! U ble: ${packageType}.`
+            );
+          } else if (status === "cancelled") {
+            alert("Pagesa u anua.");
+          } else {
+            alert("Pagesa dështoi.");
+          }
+        });
+      } else {
+        alert(
+          `OpenInvoice funksionon vetëm brenda Telegram App.\n\nZgole: ${packageType} (${starCost} Stars)`
+        );
+      }
+    } catch (err) {
+      console.error("Gabim gjatë blerjes me Stars:", err);
+      alert("Ndodhi një gabim gjatë procesimit të faturës.");
+    }
   };
 
   /* =======================================================
-     NAVIGATION
+     ENERGY REFILL
   ======================================================= */
 
-  const tabs: {
-    id: Tab;
-    label: string;
-    icon: React.ElementType;
-  }[] = [
-    {
-      id: "home",
-      label: "Home",
-      icon: Home,
-    },
-    {
-      id: "tasks",
-      label: "Tasks",
-      icon: CheckSquare,
-    },
-    {
-      id: "withdraw",
-      label: "Withdraw",
-      icon: Wallet,
-    },
-    {
-      id: "friends",
-      label: "Friends",
-      icon: Users,
-    },
-    {
-      id: "ranking",
-      label: "Ranking",
-      icon: Trophy,
-    },
-  ];
+  const refillEnergyDemo = () => {
+    setEnergy(MAX_ENERGY);
+
+    haptic("medium");
+
+    alert("Energy restored to 1000.");
+  };
 
   /* =======================================================
      RENDER
   ======================================================= */
 
   return (
-    <div className="min-h-screen w-screen bg-slate-950 text-slate-100 select-none overflow-hidden">
-      <div className="relative flex flex-col h-screen w-full max-w-md mx-auto bg-slate-950 border-x border-slate-900 shadow-2xl">
+    <div className="flex flex-col h-screen w-screen max-w-md mx-auto bg-slate-950 text-slate-100 font-sans select-none overflow-hidden relative shadow-2xl border border-slate-800">
 
-        {/* =================================================
-            HEADER
-        ================================================= */}
+      {/* HEADER */}
+      <header className="px-5 pt-5 pb-3 flex justify-between items-center z-10 shrink-0">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-lg text-white shadow-lg">
+            A
+          </div>
+          <div>
+            <h1 className="text-lg font-extrabold tracking-wide text-white">
+              AdDev Rewards
+            </h1>
+            <div className="flex items-center space-x-1 text-xs text-indigo-400 font-medium">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Level: Pro Publisher</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-full">
+          <Flame className="w-4 h-4 text-orange-500" />
+          <span className="text-sm font-bold text-orange-400">
+            {dailyStreak} Days
+          </span>
+        </div>
+      </header>
 
-        <header className="px-5 pt-5 pb-3 flex items-center justify-between shrink-0">
+      {/* MAIN */}
+      <main className="flex-1 overflow-y-auto px-5 py-2 z-10 pb-24">
 
-          <div className="flex items-center gap-3">
-
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-black text-xl shadow-lg">
-              A
+        {/* HOME */}
+        {activeTab === "home" && (
+          <div className="flex flex-col items-center space-y-3 pt-1">
+            <div className="text-center bg-slate-900/90 border border-slate-800 rounded-3xl p-4 w-full shadow-xl">
+              <p className="text-[11px] uppercase tracking-widest text-slate-400 font-semibold mb-1">
+                Total AdCoins
+              </p>
+              <div className="flex items-center justify-center space-x-2">
+                <Coins className="w-7 h-7 text-yellow-400" />
+                <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500">
+                  {coins.toLocaleString()}
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">
+                Min. Payout: {MIN_WITHDRAW.toLocaleString()} AdCoins
+              </p>
             </div>
 
-            <div>
-              <h1 className="text-lg font-extrabold tracking-wide">
-                AdDev Rewards
-              </h1>
-
-              <div className="flex items-center gap-1 text-xs text-indigo-400">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-
-                <span>
-                  Level: Pro Publisher
+            <div
+              key={tapAnimation}
+              onClick={handleTap}
+              className="relative w-40 h-40 rounded-full bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-1.5 shadow-2xl cursor-pointer active:scale-95 transition-transform flex items-center justify-center"
+            >
+              <div className="w-full h-full rounded-full bg-slate-950 flex flex-col items-center justify-center">
+                <Gamepad2 className="w-12 h-12 text-indigo-400 mb-1" />
+                <span className="text-sm font-bold text-white tracking-wider">
+                  TAP / PLAY
+                </span>
+                <span className="text-[10px] text-indigo-300 font-medium">
+                  +1 AdCoin
                 </span>
               </div>
             </div>
 
-          </div>
-
-          <div className="flex items-center gap-2">
-
-            <button
-              onClick={() => setShowInfo(true)}
-              className="w-9 h-9 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center"
-            >
-              <Info className="w-4 h-4 text-slate-400" />
-            </button>
-
-            <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 px-3 py-2 rounded-full">
-              <Flame className="w-4 h-4 text-orange-500" />
-
-              <span className="text-xs font-bold text-orange-400">
-                {dailyStreak} Days
-              </span>
-            </div>
-
-          </div>
-
-        </header>
-
-        {/* =================================================
-            MAIN CONTENT
-        ================================================= */}
-
-        <main className="flex-1 overflow-y-auto px-5 pt-1 pb-24">
-
-          {/* =================================================
-              HOME
-          ================================================= */}
-
-          {activeTab === "home" && (
-            <div className="space-y-3">
-
-              {/* Balance */}
-
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 text-center shadow-xl">
-
-                <p className="text-[11px] uppercase tracking-widest text-slate-400 font-semibold">
-                  Total AdCoins
-                </p>
-
-                <div className="flex items-center justify-center gap-2 mt-1">
-
-                  <Coins className="w-7 h-7 text-yellow-400" />
-
-                  <span className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500">
-                    {coins.toLocaleString()}
-                  </span>
-
+            <div className="w-full bg-slate-900/80 border border-slate-800 rounded-2xl p-3 flex items-center justify-between shadow-lg">
+              <div className="flex items-center space-x-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Cpu className="w-4 h-4" />
                 </div>
-
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Minimum payout:{" "}
-                  {MIN_WITHDRAW.toLocaleString()} AdCoins
-                </p>
-
-              </div>
-
-              {/* Tap */}
-
-              <div className="flex justify-center py-2">
-
-                <div
-                  onClick={handleTap}
-                  className="relative w-44 h-44 rounded-full bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-1.5 shadow-2xl cursor-pointer active:scale-95 transition-transform"
-                >
-
-                  <div className="w-full h-full rounded-full bg-slate-950 flex flex-col items-center justify-center">
-
-                    <Gamepad2 className="w-12 h-12 text-indigo-400 mb-1" />
-
-                    <span className="text-sm font-bold tracking-wider">
-                      TAP / PLAY
-                    </span>
-
-                    <span className="text-[10px] text-indigo-300">
-                      +1 AdCoin
-                    </span>
-
-                    {tapAnimation && (
-                      <span className="absolute top-5 text-yellow-400 font-black text-xl animate-bounce">
-                        +1
-                      </span>
-                    )}
-
-                  </div>
-
-                </div>
-
-              </div>
-
-              {/* Mining */}
-
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between">
-
-                <div className="flex items-center gap-3">
-
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
-                    <Cpu
-                      className="w-5 h-5 text-amber-400 animate-spin"
-                      style={{
-                        animationDuration: "4s",
-                      }}
-                    />
-                  </div>
-
-                  <div>
-
-                    <h3 className="text-xs font-bold">
-                      Cloud Mining
-                    </h3>
-
-                    <p className="text-[11px] text-yellow-400 font-mono">
-                      Mined:{" "}
-                      {minedCoins.toLocaleString()} AdCoins
-                    </p>
-
-                  </div>
-
-                </div>
-
-                <button
-                  onClick={handleClaimMined}
-                  className="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-xl text-xs font-bold"
-                >
-                  Claim
-                </button>
-
-              </div>
-
-              {/* Energy */}
-
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3">
-
-                <div className="flex justify-between text-xs font-semibold mb-2">
-
-                  <span className="text-slate-300">
-                    Energy
-                  </span>
-
-                  <span className="text-indigo-400 font-mono">
-                    {energy} / {MAX_ENERGY}
-                  </span>
-
-                </div>
-
-                <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden">
-
-                  <div
-                    className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full transition-all"
-                    style={{
-                      width: `${(energy / MAX_ENERGY) * 100}%`,
-                    }}
-                  />
-
-                </div>
-
-              </div>
-
-            </div>
-          )}
-
-          {/* =================================================
-              TASKS
-          ================================================= */}
-
-          {activeTab === "tasks" && (
-            <div className="space-y-3">
-
-              <h2 className="text-lg font-bold">
-                Tasks & Monetization
-              </h2>
-
-              {/* CPX */}
-
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between">
-
-                <div className="flex items-center gap-3">
-
-                  <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
-                    📊
-                  </div>
-
-                  <div>
-                    <h3 className="text-xs font-bold">
-                      CPX Research Offerwall
-                    </h3>
-
-                    <p className="text-[11px] text-slate-400">
-                      High paying surveys
-                    </p>
-                  </div>
-
-                </div>
-
-                <button
-                  onClick={openCPX}
-                  className="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1"
-                >
-                  Open
-                  <ExternalLink className="w-3 h-3" />
-                </button>
-
-              </div>
-
-              {/* Stars */}
-
-              <div className="bg-gradient-to-r from-amber-950/40 to-yellow-950/40 border border-amber-500/30 rounded-2xl p-4">
-
-                <div className="flex items-center gap-2 mb-3">
-
-                  <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
-
-                  <h3 className="text-sm font-bold">
-                    Telegram Stars Shop
+                <div>
+                  <h3 className="text-xs font-bold text-white">
+                    Cloud Mining
                   </h3>
-
+                  <p className="text-[11px] text-yellow-400 font-mono">
+                    Mined: {minedCoins.toLocaleString()} AdCoins
+                  </p>
                 </div>
-
-                <div className="grid grid-cols-2 gap-2">
-
-                  <button
-                    onClick={() =>
-                      handleBuyWithStars(
-                        "Max Energy",
-                        50
-                      )
-                    }
-                    className="bg-slate-900 border border-amber-500/20 p-3 rounded-xl text-left"
-                  >
-
-                    <div className="text-xs font-bold">
-                      ⚡ Max Energy
-                    </div>
-
-                    <div className="text-[11px] text-yellow-400 font-bold mt-1">
-                      50 Stars ⭐
-                    </div>
-
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      handleBuyWithStars(
-                        "5,000 AdCoins",
-                        100
-                      )
-                    }
-                    className="bg-slate-900 border border-amber-500/20 p-3 rounded-xl text-left"
-                  >
-
-                    <div className="text-xs font-bold">
-                      🪙 +5,000 AdCoins
-                    </div>
-
-                    <div className="text-[11px] text-yellow-400 font-bold mt-1">
-                      100 Stars ⭐
-                    </div>
-
-                  </button>
-
-                </div>
-
               </div>
-
-              {/* Adsgram */}
-
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between">
-
-                <div className="flex items-center gap-3">
-
-                  <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
-                    <PlaySquare className="w-5 h-5 text-cyan-400" />
-                  </div>
-
-                  <div>
-
-                    <h3 className="text-xs font-bold">
-                      Watch Sponsored Ad
-                    </h3>
-
-                    <p className="text-[11px] text-slate-400">
-                      +250 AdCoins
-                    </p>
-
-                  </div>
-
-                </div>
-
-                <button
-                  onClick={handleWatchAdsgram}
-                  disabled={isWatchingAd}
-                  className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 px-4 py-2 rounded-xl text-xs font-bold"
-                >
-                  {isWatchingAd
-                    ? "Loading..."
-                    : "Watch"}
-                </button>
-
-              </div>
-
-              {/* Energy Bonus */}
-
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between">
-
-                <div className="flex items-center gap-3">
-
-                  <div className="w-10 h-10 rounded-xl bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center">
-                    <Gift className="w-5 h-5 text-yellow-400" />
-                  </div>
-
-                  <div>
-
-                    <h3 className="text-xs font-bold">
-                      Energy Bonus
-                    </h3>
-
-                    <p className="text-[11px] text-slate-400">
-                      Restore your energy
-                    </p>
-
-                  </div>
-
-                </div>
-
-                <button
-                  onClick={handleEnergyBonus}
-                  className="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-xl text-xs font-bold"
-                >
-                  Refill
-                </button>
-
-              </div>
-
+              <button
+                onClick={handleClaimMined}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-md"
+              >
+                Claim
+              </button>
             </div>
-          )}
 
-          {/* =================================================
-              WITHDRAW
-          ================================================= */}
+            <div className="w-full bg-slate-900/80 border border-slate-800 rounded-2xl p-3 shadow-lg">
+              <div className="flex justify-between items-center text-xs font-semibold mb-2">
+                <div className="flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                  <span className="text-slate-300">Energy</span>
+                </div>
+                <span className="text-indigo-400 font-mono">
+                  {energy} / {MAX_ENERGY}
+                </span>
+              </div>
+              <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+                <div
+                  className="bg-gradient-to-r from-indigo-500 to-cyan-400 h-full rounded-full transition-all"
+                  style={{
+                    width: `${Math.max(
+                      0,
+                      Math.min(100, (energy / MAX_ENERGY) * 100)
+                    )}%`,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
-          {activeTab === "withdraw" && (
-            <div className="space-y-4">
+        {/* TASKS */}
+        {activeTab === "tasks" && (
+          <div className="space-y-3 pt-1">
+            <h2 className="text-lg font-bold text-white mb-3">
+              Tasks & Monetization
+            </h2>
 
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5">
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between shadow-lg">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                  <BarChart3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-white">
+                    CPX Research Offerwall
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    High paying surveys
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowOfferwallModal(true)}
+                className="bg-purple-600 hover:bg-purple-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center"
+              >
+                Open
+                <ExternalLink className="w-3 h-3 ml-1" />
+              </button>
+            </div>
 
-                <h2 className="text-lg font-bold">
-                  Withdraw Funds
-                </h2>
+            {/* TELEGRAM STARS SHOP REAL */}
+            <div className="bg-gradient-to-r from-amber-950/40 to-yellow-950/40 border border-amber-500/30 rounded-2xl p-4 shadow-lg">
+              <div className="flex items-center space-x-2 mb-3">
+                <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+                <h3 className="text-sm font-bold text-white">
+                  Telegram Stars Shop
+                </h3>
+              </div>
 
-                <p className="text-xs text-slate-400 mt-1 mb-4">
-                  Minimum payout:{" "}
-                  <strong className="text-slate-200">
-                    {MIN_WITHDRAW.toLocaleString()} AdCoins
-                  </strong>
-                </p>
-
-                {/* Wallet */}
-
-                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between mb-4">
-
-                  <div className="min-w-0">
-
-                    <span className="block text-[10px] text-slate-500 uppercase">
-                      TON Wallet
-                    </span>
-
-                    <span className="block text-xs font-bold text-emerald-400 truncate">
-                      {connectedWallet ||
-                        "Not Connected"}
-                    </span>
-
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  onClick={() =>
+                    handleBuyWithStarsReal("Energy Refill", 50, 0)
+                  }
+                  className="bg-slate-900 border border-amber-500/20 p-2.5 rounded-xl text-left hover:border-amber-500/50 transition-colors"
+                >
+                  <div className="text-xs font-bold text-white mb-0.5">
+                    ⚡ Max Energy
                   </div>
+                  <div className="text-[11px] text-yellow-400 font-extrabold">
+                    50 Stars ⭐
+                  </div>
+                </button>
 
+                <button
+                  onClick={() =>
+                    handleBuyWithStarsReal("5,000 AdCoins", 100, 5000)
+                  }
+                  className="bg-slate-900 border border-amber-500/20 p-2.5 rounded-xl text-left hover:border-amber-500/50 transition-colors"
+                >
+                  <div className="text-xs font-bold text-white mb-0.5">
+                    🪙 +5,000 AdCoins
+                  </div>
+                  <div className="text-[11px] text-yellow-400 font-extrabold">
+                    100 Stars ⭐
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between shadow-lg">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                  <PlaySquare className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-white">
+                    Watch Sponsored Ad
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    +{AD_REWARD} AdCoins (Adsgram)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleWatchAdsgram}
+                disabled={isWatchingAd}
+                className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-md"
+              >
+                {isWatchingAd ? "Loading..." : "Watch"}
+              </button>
+            </div>
+
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-yellow-500/10 flex items-center justify-center">
+                  <Gift className="w-5 h-5 text-yellow-400" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-white">
+                    Energy Bonus
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Restore your energy
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={refillEnergyDemo}
+                className="bg-indigo-600 text-white px-3 py-2 rounded-xl text-xs font-bold"
+              >
+                Refill
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* WITHDRAW */}
+        {activeTab === "withdraw" && (
+          <div className="space-y-4 pt-1">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl">
+              <h2 className="text-lg font-bold text-white mb-1">
+                Withdraw Funds
+              </h2>
+              <p className="text-xs text-slate-400 mb-4">
+                Minimum payout:{" "}
+                <strong>{MIN_WITHDRAW.toLocaleString()} AdCoins</strong>
+              </p>
+
+              <div className="mb-4 bg-slate-950 border border-slate-800 rounded-2xl p-3.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="block text-[10px] text-slate-400 uppercase font-semibold">
+                      Telegram Wallet
+                    </span>
+                    <span className="block text-xs font-bold text-emerald-400 mt-1">
+                      {connectedWallet || "Not Connected"}
+                    </span>
+                  </div>
                   <button
                     onClick={handleConnectWallet}
-                    className="bg-indigo-600 hover:bg-indigo-500 px-3 py-2 rounded-xl text-xs font-bold"
+                    disabled={
+                      isConnectingWallet || Boolean(connectedWallet)
+                    }
+                    className="bg-indigo-600 disabled:opacity-60 text-white px-3 py-2 rounded-xl text-xs font-bold"
                   >
-                    {connectedWallet
+                    {isConnectingWallet
+                      ? "Connecting..."
+                      : connectedWallet
                       ? "Connected"
                       : "Connect"}
                   </button>
-
                 </div>
-
-                {/* Balance */}
-
-                <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 mb-3">
-
-                  <div className="flex justify-between text-xs">
-
-                    <span className="text-slate-400">
-                      Available
-                    </span>
-
-                    <span className="text-yellow-400 font-bold">
-                      {coins.toLocaleString()} AdCoins
-                    </span>
-
-                  </div>
-
-                </div>
-
-                <form
-                  onSubmit={handleWithdraw}
-                  className="space-y-3"
-                >
-
-                  <input
-                    type="number"
-                    min={MIN_WITHDRAW}
-                    value={withdrawAmount}
-                    onChange={(event) =>
-                      setWithdrawAmount(
-                        event.target.value
-                      )
-                    }
-                    placeholder="Enter AdCoins amount"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500"
-                  />
-
-                  <button
-                    type="submit"
-                    disabled={isSubmittingWithdraw}
-                    className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2"
-                  >
-
-                    {isSubmittingWithdraw ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        Request Withdrawal
-                        <ArrowUpRight className="w-4 h-4" />
-                      </>
-                    )}
-
-                  </button>
-
-                </form>
-
               </div>
 
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3 mb-4">
+                <div className="flex justify-between">
+                  <span className="text-xs text-slate-400">
+                    Available balance
+                  </span>
+                  <span className="text-xs font-bold text-yellow-400">
+                    {coins.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              <form onSubmit={handleWithdraw} className="space-y-3">
+                <input
+                  type="number"
+                  min={MIN_WITHDRAW}
+                  value={withdrawAmount}
+                  onChange={(event) =>
+                    setWithdrawAmount(event.target.value)
+                  }
+                  placeholder={`Min. ${MIN_WITHDRAW.toLocaleString()} AdCoins`}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-3 text-xs text-white outline-none focus:border-indigo-500"
+                />
+                <button
+                  type="submit"
+                  disabled={isSubmittingWithdraw}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center space-x-2"
+                >
+                  <span>
+                    {isSubmittingWithdraw
+                      ? "Processing..."
+                      : "Request Withdrawal"}
+                  </span>
+                  <ArrowUpRight className="w-4 h-4" />
+                </button>
+              </form>
+
+              <div className="mt-4 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10">
+                <p className="text-[10px] text-slate-400 leading-relaxed">
+                  Withdrawals are subject to account, reward and wallet verification.
+                </p>
+              </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* =================================================
-              FRIENDS
-          ================================================= */}
-
-          {activeTab === "friends" && (
+        {/* FRIENDS */}
+        {activeTab === "friends" && (
+          <div className="space-y-4">
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 text-center">
-
-              <div className="w-14 h-14 mx-auto rounded-2xl bg-indigo-500/10 flex items-center justify-center mb-3">
+              <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-indigo-500/10 flex items-center justify-center">
                 <Users className="w-7 h-7 text-indigo-400" />
               </div>
-
-              <h2 className="text-lg font-bold">
+              <h2 className="text-lg font-bold text-white mb-1.5">
                 Referral Program
               </h2>
-
-              <p className="text-xs text-slate-400 mt-2 mb-5">
-                Earn 1,000 AdCoins for every
-                invited friend.
+              <p className="text-xs text-slate-400 mb-5">
+                Earn {REFERRAL_REWARD.toLocaleString()} AdCoins for every invited friend!
               </p>
-
-              <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 mb-3">
-
-                <p className="text-[10px] text-slate-500 mb-1">
-                  YOUR REFERRAL LINK
-                </p>
-
-                <p className="text-[10px] text-indigo-300 break-all">
-                  {referralLink}
-                </p>
-
-              </div>
-
               <button
                 onClick={handleCopyRef}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2"
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-2xl text-xs flex items-center justify-center space-x-2"
               >
-
                 {copiedRef ? (
                   <CheckCircle2 className="w-4 h-4 text-emerald-300" />
                 ) : (
                   <Copy className="w-4 h-4" />
                 )}
-
-                {copiedRef
-                  ? "Copied!"
-                  : "Copy Referral Link"}
-
+                <span>
+                  {copiedRef ? "Copied!" : "Copy Referral Link"}
+                </span>
               </button>
-
             </div>
-          )}
 
-          {/* =================================================
-              RANKING
-          ================================================= */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">
+                Your Telegram ID
+              </p>
+              <p className="text-xs text-slate-300 font-mono break-all">
+                {telegramUserId}
+              </p>
+            </div>
 
-          {activeTab === "ranking" && (
-            <div className="space-y-3">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">
+                Referral link
+              </p>
+              <p className="text-[10px] text-slate-400 break-all">
+                {referralLink}
+              </p>
+            </div>
+          </div>
+        )}
 
-              <h2 className="text-lg font-bold">
+        {/* RANKING */}
+        {activeTab === "ranking" && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-yellow-400" />
+              <h2 className="text-lg font-bold text-white">
                 Global Leaderboard
               </h2>
-
-              {[
-                {
-                  name: "Fidan Beciri",
-                  coins: 145200,
-                },
-                {
-                  name: "Reward Hunter",
-                  coins: 128450,
-                },
-                {
-                  name: "AdMaster",
-                  coins: 113900,
-                },
-                {
-                  name: "Coin Player",
-                  coins: 98400,
-                },
-              ].map((player, index) => (
-
-                <div
-                  key={player.name}
-                  className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between"
-                >
-
-                  <div className="flex items-center gap-3">
-
-                    <div className="w-8 h-8 rounded-full bg-indigo-500/10 flex items-center justify-center text-xs font-black text-indigo-400">
-                      #{index + 1}
-                    </div>
-
-                    <span className="text-xs font-bold">
-                      {player.name}
-                    </span>
-
-                  </div>
-
-                  <span className="text-xs font-extrabold text-yellow-400">
-                    {player.coins.toLocaleString()}
-                  </span>
-
-                </div>
-
-              ))}
-
             </div>
-          )}
 
-        </main>
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <span className="text-lg">👑</span>
+                <div>
+                  <span className="block text-xs font-bold text-white">
+                    {telegramUsername}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Your account
+                  </span>
+                </div>
+              </div>
+              <span className="text-xs font-extrabold text-yellow-400">
+                {coins.toLocaleString()}
+              </span>
+            </div>
 
-        {/* =================================================
-            BOTTOM NAV
-        ================================================= */}
-
-        <nav className="absolute bottom-0 left-0 right-0 bg-slate-900/98 border-t border-slate-800 px-2 py-2 flex justify-around z-30">
-
-          {tabs.map((tab) => {
-
-            const Icon = tab.icon;
-
-            const active =
-              activeTab === tab.id;
-
-            return (
-              <button
-                key={tab.id}
-                onClick={() =>
-                  setActiveTab(tab.id)
-                }
-                className={`flex flex-col items-center py-1.5 px-3 rounded-2xl transition ${
-                  active
-                    ? "text-indigo-400 bg-indigo-500/10"
-                    : "text-slate-500"
-                }`}
+            {[
+              { rank: 1, name: "Top Publisher", coins: 250000 },
+              { rank: 2, name: "AdDev Player", coins: 198500 },
+              { rank: 3, name: "Rewards Master", coins: 175300 },
+            ].map((player) => (
+              <div
+                key={player.rank}
+                className="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex justify-between items-center"
               >
-
-                <Icon className="w-5 h-5" />
-
-                <span className="text-[10px] font-semibold mt-1">
-                  {tab.label}
+                <div className="flex items-center gap-3">
+                  <span className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold">
+                    {player.rank}
+                  </span>
+                  <span className="text-xs font-bold text-white">
+                    {player.name}
+                  </span>
+                </div>
+                <span className="text-xs font-extrabold text-yellow-400">
+                  {player.coins.toLocaleString()}
                 </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
 
-              </button>
-            );
-          })}
+      {/* CPX MODAL */}
+      {showOfferwallModal && (
+        <div className="absolute inset-0 bg-slate-950/95 z-50 flex flex-col p-4">
+          <div className="flex justify-between items-center mb-3">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-purple-400" />
+              <h3 className="text-sm font-bold text-white">CPX Research</h3>
+            </div>
+            <button
+              onClick={() => setShowOfferwallModal(false)}
+              className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-slate-300"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
 
-        </nav>
+          <div className="flex-1 bg-slate-900 border border-slate-800 rounded-3xl p-5 flex flex-col items-center justify-center text-center">
+            <BarChart3 className="w-12 h-12 text-purple-400 mb-4" />
+            <h4 className="text-base font-bold text-white mb-2">
+              Complete Surveys
+            </h4>
+            <p className="text-xs text-slate-400 mb-5">
+              Complete available surveys and earn rewards.
+            </p>
+            <button
+              onClick={() => {
+                if (window.Telegram?.WebApp?.openLink) {
+                  window.Telegram.WebApp.openLink(cpxOfferwallUrl);
+                } else {
+                  window.open(cpxOfferwallUrl, "_blank", "noopener,noreferrer");
+                }
+              }}
+              className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 px-5 rounded-2xl text-xs flex items-center gap-2"
+            >
+              Open Offerwall
+              <ExternalLink className="w-4 h-4" />
+            </button>
+            <p className="text-[9px] text-slate-600 mt-4 break-all">
+              User ID: {telegramUserId}
+            </p>
+          </div>
+        </div>
+      )}
 
-        {/* =================================================
-            NOTICE / TOAST
-        ================================================= */}
+      {/* BOTTOM NAVIGATION */}
+      <nav className="absolute bottom-0 left-0 right-0 bg-slate-900/95 border-t border-slate-800 px-2 py-1.5 z-20 flex justify-around">
+        {[
+          { id: "home", label: "Home", icon: Home },
+          { id: "tasks", label: "Tasks", icon: CheckSquare },
+          { id: "withdraw", label: "Withdraw", icon: Wallet },
+          { id: "friends", label: "Friends", icon: Users },
+          { id: "ranking", label: "Ranking", icon: Trophy },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
 
-        {notice && (
-          <div className="absolute top-4 left-4 right-4 z-[100]">
-
-            <div
-              className={`rounded-2xl border p-4 shadow-2xl backdrop-blur-xl ${
-                notice.type === "success"
-                  ? "bg-emerald-950/95 border-emerald-700"
-                  : notice.type === "error"
-                  ? "bg-red-950/95 border-red-700"
-                  : "bg-slate-900/95 border-slate-700"
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex flex-col items-center py-1 px-3 rounded-2xl transition-all ${
+                isActive
+                  ? "text-indigo-400 bg-indigo-500/10"
+                  : "text-slate-400"
               }`}
             >
-
-              <div className="flex items-start gap-3">
-
-                <div className="flex-1">
-
-                  <h3 className="text-sm font-bold">
-                    {notice.title}
-                  </h3>
-
-                  <p className="text-xs text-slate-300 mt-1">
-                    {notice.message}
-                  </p>
-
-                </div>
-
-                <button
-                  onClick={() => setNotice(null)}
-                  className="text-slate-500"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-
-              </div>
-
-            </div>
-
-          </div>
-        )}
-
-        {/* =================================================
-            INFO MODAL
-        ================================================= */}
-
-        {showInfo && (
-          <div className="absolute inset-0 z-[90] bg-black/70 backdrop-blur-sm flex items-center justify-center p-5">
-
-            <div className="w-full bg-slate-900 border border-slate-700 rounded-3xl p-5 shadow-2xl">
-
-              <div className="flex justify-between items-center mb-4">
-
-                <h2 className="text-lg font-bold">
-                  About AdDev Rewards
-                </h2>
-
-                <button
-                  onClick={() => setShowInfo(false)}
-                  className="text-slate-400"
-                >
-                  <X />
-                </button>
-
-              </div>
-
-              <div className="space-y-3 text-xs text-slate-400">
-
-                <p>
-                  AdDev Rewards is a Telegram Mini App
-                  where users can earn AdCoins through
-                  activities, advertisements and referrals.
-                </p>
-
-                <div className="bg-slate-950 rounded-xl p-3">
-                  <div className="flex items-center gap-2 text-slate-300">
-                    <Zap className="w-4 h-4 text-yellow-400" />
-                    Energy regenerates automatically.
-                  </div>
-                </div>
-
-                <div className="bg-slate-950 rounded-xl p-3">
-                  <div className="flex items-center gap-2 text-slate-300">
-                    <Clock3 className="w-4 h-4 text-indigo-400" />
-                    Cloud Mining generates AdCoins over time.
-                  </div>
-                </div>
-
-                <p className="text-yellow-400/80">
-                  Real withdrawals, real referrals and
-                  real payment verification require a
-                  secure backend/bot.
-                </p>
-
-              </div>
-
-            </div>
-
-          </div>
-        )}
-
-        {/* =================================================
-            CPX MODAL
-        ================================================= */}
-
-        {showOfferwall && (
-          <div className="absolute inset-0 z-[80] bg-slate-950 flex flex-col p-5">
-
-            <div className="flex items-center justify-between mb-4">
-
-              <h2 className="font-bold">
-                CPX Research
-              </h2>
-
-              <button
-                onClick={() =>
-                  setShowOfferwall(false)
-                }
-                className="text-slate-400"
-              >
-                <X />
-              </button>
-
-            </div>
-
-            <div className="flex-1 bg-slate-900 border border-slate-800 rounded-3xl flex flex-col items-center justify-center p-6 text-center">
-
-              <div className="w-16 h-16 rounded-2xl bg-purple-500/10 flex items-center justify-center mb-4">
-                📊
-              </div>
-
-              <h3 className="font-bold mb-2">
-                CPX Research Offerwall
-              </h3>
-
-              <p className="text-xs text-slate-400 mb-5">
-                Complete available surveys and
-                eligible offers.
-              </p>
-
-              <button
-                onClick={openCPX}
-                className="bg-purple-600 hover:bg-purple-500 px-6 py-3 rounded-2xl text-xs font-bold flex items-center gap-2"
-              >
-                Open Offerwall
-                <ExternalLink className="w-4 h-4" />
-              </button>
-
-            </div>
-
-          </div>
-        )}
-
-      </div>
+              <Icon className="w-5 h-5" />
+              <span className="text-[10px] font-semibold mt-0.5">
+                {tab.label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 }
