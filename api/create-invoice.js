@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!data.ok) {
-      throw new Error(data.description || 'Failed to create invoice link from Telegram');
+      throw new Error(data.description || 'Failed to create invoice link');
     }
 
     return res.status(200).json({ invoiceLink: data.result });
