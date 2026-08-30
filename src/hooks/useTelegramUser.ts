@@ -1,41 +1,60 @@
-import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
-import { getTelegramWebApp } from "../lib/telegram";
+import { useState, useEffect } from 'react'
+import { supabase } from './supabase'
+import { getTelegramWebApp } from './telegram'
 
-export type TelegramUser = {
-  id: number;
-  username?: string;
-  first_name: string;
-};
-
-export default function useTelegramUser() {
-  const [user, setUser] = useState<TelegramUser | null>(null);
+export function useTelegramUser() {
+  const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState<boolean>(true)
 
   useEffect(() => {
-    const tg = getTelegramWebApp();
+    async function initUser() {
+      const tg = getTelegramWebApp()
+      const tgUser = tg?.initDataUnsafe?.user
 
-    if (!tg?.initDataUnsafe?.user) return;
+      if (!tgUser) {
+        setLoading(false)
+        return
+      }
 
-    const telegramUser = tg.initDataUnsafe.user;
+      try {
+        // 1. Kontrollojmë nëse përdoruesi ekziston në Supabase
+        const { data: existingUser, error: fetchError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('telegram_id', tgUser.id.toString())
+          .single()
 
-    setUser(telegramUser);
+        if (existingUser) {
+          setUser(existingUser)
+        } else {
+          // 2. Nëse nuk ekziston, e regjistrojmë automatikisht për herë të parë
+          const newUser = {
+            telegram_id: tgUser.id.toString(),
+            username: tgUser.username || tgUser.first_name || 'User',
+            points: 0,
+            energy: 100,
+            created_at: new Date().toISOString()
+          }
 
-    saveUser(telegramUser);
-  }, []);
+          const { data: insertedUser, error: insertError } = await supabase
+            .from('users')
+            .insert([newUser])
+            .select()
+            .single()
 
-  async function saveUser(telegramUser: TelegramUser) {
-    const { error } = await supabase
-      .from("users")
-      .upsert({
-        telegram_id: telegramUser.id,
-        username: telegramUser.username ?? "",
-        first_name: telegramUser.first_name,
-      });
-
-    if (error) {
-      console.log(error);
+          if (!insertError && insertedUser) {
+            setUser(insertedUser)
+          }
+        }
+      } catch (err) {
+        console.error('Gabim gjatë lidhjes me Supabase:', err)
+      } finally {
+        setLoading(false)
+      }
     }
-  }
 
-  return user;
+    initUser()
+  }, [])
+
+  return { user, loading }
 }
