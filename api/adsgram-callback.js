@@ -6,22 +6,19 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Get parameters from query (Adsgram usually sends via GET parameters)
     const { userid, user_id, reward } = req.method === 'GET' ? req.query : req.body;
     const userId = userid || user_id;
-    const rewardAmount = Number(reward) || 10; // Default reward points
+    const rewardAmount = Number(reward) || 10;
 
     if (!userId) {
       return res.status(400).json({ error: 'User ID is missing' });
     }
 
-    // Initialize Supabase client
     const supabaseAdmin = createClient(
       process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
 
-    // Fetch current user balance
     const { data: userData, error: fetchError } = await supabaseAdmin
       .from('profiles')
       .select('balance')
@@ -34,7 +31,6 @@ export default async function handler(req, res) {
 
     const newBalance = (userData?.balance || 0) + rewardAmount;
 
-    // Update balance in Supabase
     const { error: updateError } = await supabaseAdmin
       .from('profiles')
       .update({ balance: newBalance })
